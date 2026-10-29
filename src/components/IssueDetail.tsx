@@ -144,7 +144,7 @@ function IssueDetailBody({ issueId, onClose, fromRun }: Props) {
   const moreRow = (m: More) => (
     <button key={m.label} type="button" className={`mrow ${m.warn ? "warn" : ""}`} disabled={busy} onClick={m.onClick}><span>{m.label}</span><Chevron /></button>
   );
-  const moreCount = more.length + (hasRange ? 2 : 0) + (onPile && isDC ? 1 : 0) + (onPile || ui?.status === "wishlist" ? 1 : 0);
+  const moreCount = more.length + (hasRange ? 2 : 0) + (onPile && isDC ? 1 : 0) + 1;
 
   return (
     <div className="issue-detail">
@@ -188,7 +188,7 @@ function IssueDetailBody({ issueId, onClose, fromRun }: Props) {
           {onPile && isDC && (
             <div className="mrow"><span>Format</span><FormatChips value={ui.format ?? "print"} onChange={(f) => run(() => actions.setFormat(issueId, f))} /></div>
           )}
-          {(onPile || ui?.status === "wishlist") && <div className="mrow pick"><EventPick issue={issue} isDC={isDC} /></div>}
+          <div className="mrow pick"><EventPick issue={issue} isDC={isDC} /></div>
           {hasRange && (
             <>
               <RangeAction issue={issue} mode="read" />

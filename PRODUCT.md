@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-Delegated and approved: Vite + React + TypeScript as an installable PWA on GitHub Pages (`/comic-tracker/`). Data in the Supabase project sport-recap, own schema `comics`, login by email magic link. The `metron` Edge Function syncs Metron hourly via pg_cron (catalog for last month to two months ahead, issue details and arcs for the pile) and serves series search for the app.
+Delegated and approved: Vite + React + TypeScript as an installable PWA on Vercel (https://comic-tracker-nine.vercel.app, own origin so it installs next to the other github.io apps; GitHub Pages still builds under `/comic-tracker/`). Data in the Supabase project sport-recap, own schema `comics`, login by email magic link. The `metron` Edge Function syncs Metron hourly via pg_cron (catalog for last month to two months ahead, issue details and arcs for the pile) and serves series search for the app.
 
 ## Users
 

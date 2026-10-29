@@ -56,9 +56,10 @@ describe("links", () => {
   it("searches for series and number", () => {
     expect(searchUrl("Absolute Batman", "12")).toBe("https://www.dcuniverseinfinite.com/search?q=Absolute%20Batman%20%2312&group=comics");
   });
-  it("hands the link to the app on Android with the web page as fallback", () => {
+  it("hands issue pages to the app on Android, searches stay in the browser", () => {
     const u = "https://www.dcuniverseinfinite.com/comics/book/batman-2011-52/bae9d698-f6cf-43b0-98ae-7b5ce5acfd34";
     expect(openHref(u, false)).toBe(u);
+    expect(openHref(searchUrl("Batman", "1"), true)).toBe(searchUrl("Batman", "1"));
     expect(openHref(u, true)).toBe(
       `intent://www.dcuniverseinfinite.com/comics/book/batman-2011-52/bae9d698-f6cf-43b0-98ae-7b5ce5acfd34#Intent;scheme=https;package=com.wb.goog.dcuniverse;S.browser_fallback_url=${encodeURIComponent(u)};end`,
     );

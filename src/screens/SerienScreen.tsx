@@ -10,6 +10,7 @@ import { FormatChips } from "../components/FormatChips";
 import { SeriesSearch, type FoundSeries } from "../components/SeriesSearch";
 import { useRun } from "../components/useRun";
 import { AllIssues, useSeriesRange } from "../components/AllIssues";
+import { isFresh, markFresh } from "../lib/motion";
 
 export type SerienSel =
   | { kind: "series"; id: number; found?: FoundSeries }
@@ -147,6 +148,7 @@ export function SeriesDetail({ seriesId, found, onSelect, onGone }: {
   const { run, busy, error } = useRun();
   const relaunches = useRelaunches();
   const range = useSeriesRange(seriesId);
+  const [justFollowed] = useState(() => isFresh(`follow:${seriesId}`));
   if (!data) return null;
   const s = data.series.get(seriesId);
   const f = data.followed.find((x) => x.series_id === seriesId);
@@ -160,7 +162,7 @@ export function SeriesDetail({ seriesId, found, onSelect, onGone }: {
   return (
     <>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <h2 style={{ fontSize: 32, lineHeight: 1 }}>{seriesLong(s)}</h2>
+        <h2 style={{ fontSize: 32, lineHeight: 1 }}><span className={`marker ${justFollowed ? "fresh" : ""}`}>{seriesLong(s)}</span></h2>
         <span className="mut" style={{ fontSize: 15 }}>{read} gelesen · {open.length} auf dem Stapel</span>
       </div>
       {relaunch && (
@@ -261,6 +263,7 @@ function UnfollowedSeries({ seriesId, found, onSelect }: { seriesId: number; fou
   async function follow() {
     if (!data?.series.has(seriesId)) await metron({ action: "sync-series", series_id: seriesId });
     await actions.follow(seriesId, isDC ? "infinite" : "print");
+    markFresh(`follow:${seriesId}`);
   }
 
   return (

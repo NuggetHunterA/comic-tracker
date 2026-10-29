@@ -125,6 +125,7 @@ export function SerienList({ tab, setTab, sel, onSelect }: {
           })}
         </section>
       )}
+      <span className="d mut" style={{ fontSize: 12, marginTop: "auto", paddingTop: 16 }}>VERSION {__VERSION__}</span>
     </>
   );
 }

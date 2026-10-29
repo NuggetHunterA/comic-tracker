@@ -58,10 +58,17 @@ export function InfiniteDrop() {
 
 type Fresh = ReturnType<typeof useStore>["items"][number];
 
-function Drop({ list, today, onClose }: { list: Fresh[]; today: string; onClose: () => void }) {
+export function Drop({ list, connect, today, onClose }: {
+  list: Fresh[];
+  /** Today's DC Connect, pulled out last with its link into Infinite. */
+  connect?: { number: number; cover_url: string | null; href: string };
+  today: string;
+  onClose: () => void;
+}) {
   const root = useRef<HTMLDivElement>(null);
   const anims = useRef<Animation[]>([]);
-  const shown = list.slice(0, SHOWN);
+  const shown = list.slice(0, connect ? SHOWN - 1 : SHOWN);
+  const count = list.length + (connect ? 1 : 0);
 
   useLayoutEffect(() => {
     const el = root.current;
@@ -146,6 +153,14 @@ function Drop({ list, today, onClose }: { list: Fresh[]; today: string; onClose:
               </Cover>
             </div>
           ))}
+          {connect && (
+            <div data-r={[-2, 1.5, -1][shown.length]}>
+              <span className={`cv big ${connect.cover_url ? "img" : ""}`} style={{ backgroundImage: connect.cover_url ? `url("${connect.cover_url}")` : undefined }} aria-hidden="true">
+                <span className="tape" />
+                <span className="pinned"><span className="pin" /><span className="lbl">KATALOG</span></span>
+              </span>
+            </div>
+          )}
         </div>
         <ul className="drop-list">
           {list.map((i) => (
@@ -154,11 +169,18 @@ function Drop({ list, today, onClose }: { list: Fresh[]; today: string; onClose:
               {i.ui.status === "wishlist" && <span className="w">WUNSCH</span>}
             </li>
           ))}
+          {connect && (
+            <li>
+              <a className="drop-connect" href={connect.href} target={connect.href.startsWith("intent:") ? undefined : "_blank"} rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+                DC Connect #{connect.number}<span className="w">KATALOG ÖFFNEN</span>
+              </a>
+            </li>
+          )}
         </ul>
         <button type="button" className="btn hot drop-go" onClick={(e) => { e.stopPropagation(); close(); }}>Zum Plan</button>
       </div>
       <div className="drop-box" aria-hidden="true">
-        <div className="front"><span className="hole" /><span className="lbl">Neu auf Infinite<b>{list.length}</b></span></div>
+        <div className="front"><span className="hole" /><span className="lbl">Neu auf Infinite<b>{count}</b></span></div>
         <div className="lid" />
       </div>
     </div>

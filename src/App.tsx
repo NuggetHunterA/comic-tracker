@@ -43,8 +43,17 @@ function useTab(): Tab {
 export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (data.session) return setSession(data.session);
+      // Single-user app: sign in with the app account if the build has one, else show the form.
+      const { VITE_APP_EMAIL: email, VITE_APP_PASSWORD: password } = import.meta.env;
+      if (email && password) {
+        const { data: signed } = await supabase.auth.signInWithPassword({ email, password });
+        if (signed.session) return setSession(signed.session);
+      }
+      setSession(null);
+    });
     return () => data.subscription.unsubscribe();
   }, []);
   if (session === undefined) return null;

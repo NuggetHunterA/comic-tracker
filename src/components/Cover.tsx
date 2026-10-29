@@ -25,7 +25,7 @@ export function Cover({ issue, readable = true, showNumber = true, tape, big, st
     ...style,
   };
   return (
-    <span className={`cv ${readable ? "" : "copy"} ${big ? "big" : ""} ${className}`} style={bg} aria-hidden="true">
+    <span className={`cv ${issue.cover_url ? "img" : ""} ${readable ? "" : "copy"} ${big ? "big" : ""} ${className}`} style={bg} aria-hidden="true">
       {tape === true && <span className="tape" />}
       {typeof tape === "string" && <span className="tape label">{tape}</span>}
       {showNumber && <span className="num">{issue.number}</span>}

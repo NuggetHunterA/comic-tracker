@@ -38,8 +38,10 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; text-transform: uppe
   content: ""; position: absolute; inset: 0; pointer-events: none;
   background-image: radial-gradient(rgba(17, 17, 17, 0.35) 1px, transparent 1.4px); background-size: 5px 5px;
 }
+/* Real covers show as they are; the dot screen only fills in for missing art. */
+.cv.img::after { content: none; }
 .cv.copy { background-color: var(--copy); filter: grayscale(1) contrast(1.15); }
-.cv.copy::after { background-image: radial-gradient(var(--muted) 1px, transparent 1.5px); background-size: 4px 4px; }
+.cv.copy:not(.img)::after { background-image: radial-gradient(var(--muted) 1px, transparent 1.5px); background-size: 4px 4px; }
 .cv .num {
   position: absolute; left: 4px; bottom: 4px; z-index: 1; background: var(--ink); color: var(--paper);
   font-family: var(--display); font-size: 14px; line-height: 1.2; padding: 0 3px;
@@ -146,6 +148,11 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-weight: 700;
   background: var(--paper); border-top: 3px solid var(--ink); padding: 18px 20px calc(20px + env(safe-area-inset-bottom));
   display: flex; flex-direction: column; gap: 14px;
 }
+.sheet-bar {
+  position: sticky; top: -18px; z-index: 2; display: flex; justify-content: flex-end;
+  margin: -18px -20px -6px; padding: 6px 8px 0; background: var(--paper);
+}
+.sheet-bar .iconbtn { width: 52px; height: 52px; }
 
 /* ---------- Shell: unfolded (rail + list + detail) ---------- */
 @media (min-width: 700px) {

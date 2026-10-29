@@ -1,5 +1,5 @@
 // Metron sync for the comic tracker.
-// POST {action: "cron"} with x-cron-secret: scheduled catalog and detail sync.
+// POST {action: "cron"} with x-cron-secret: scheduled sync of followed series and the catalog.
 // POST {action: "search-series", q} or {action: "sync-series", series_id} with a user JWT.
 import { createClient } from "npm:@supabase/supabase-js@2.58.0";
 
@@ -161,43 +161,6 @@ async function syncFollowedSeries(log: string[]) {
   }
 }
 
-// Fetch issue details (arcs) for issues users own or plan to read.
-async function syncDetails(log: string[]) {
-  const { data: mine } = await db.from("user_issues").select("issue_id").in("status", ["pile", "expected", "wishlist"]);
-  const ids = [...new Set((mine ?? []).map((r) => r.issue_id))];
-  if (!ids.length) return;
-  const todo: number[] = [];
-  for (let i = 0; i < ids.length; i += 200) {
-    const { data } = await db.from("issues").select("id").in("id", ids.slice(i, i + 200)).is("detail_synced_at", null);
-    todo.push(...(data ?? []).map((r) => r.id));
-  }
-  todo.sort((a, b) => a - b);
-  let n = 0;
-  for (const id of todo) {
-    const d = await metron(`issue/${id}/`);
-    for (const arc of d.arcs ?? []) {
-      const { data: known } = await db.from("arcs").select("id, issues_synced_at").eq("id", arc.id).maybeSingle();
-      if (!known) await db.from("arcs").upsert({ id: arc.id, name: arc.name });
-      if (!known?.issues_synced_at) await syncArc(arc.id);
-    }
-    await db.from("issues").update({ detail_synced_at: new Date().toISOString() }).eq("id", id);
-    n++;
-  }
-  log.push(`details: ${n}`);
-}
-
-async function syncArc(arcId: number) {
-  const items = await metronAll(`arc/${arcId}/issue_list/`, {});
-  await upsertListIssues(items, null);
-  await db.from("arc_issues").delete().eq("arc_id", arcId);
-  const rows = items.map((it, i) => ({ arc_id: arcId, issue_id: it.id, position: i + 1 }));
-  if (rows.length) {
-    const { error } = await db.from("arc_issues").upsert(rows, { onConflict: "arc_id,issue_id" });
-    if (error) throw error;
-  }
-  await db.from("arcs").update({ issues_synced_at: new Date().toISOString() }).eq("id", arcId);
-}
-
 async function cron(): Promise<string> {
   deadline = Date.now() + RUN_BUDGET_MS;
   const log: string[] = [];
@@ -206,7 +169,6 @@ async function cron(): Promise<string> {
   try {
     await syncFollowedSeries(log);
     await db.rpc("materialize_followed");
-    await syncDetails(log);
     await syncCatalog(log);
     await db.rpc("materialize_followed");
   } catch (e) {

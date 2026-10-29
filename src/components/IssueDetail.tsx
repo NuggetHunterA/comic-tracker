@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { actions, useStore } from "../lib/store";
 import { addDays, dateLabel, dayLabel, shortDate } from "../lib/dates";
@@ -11,6 +11,8 @@ import { useRun } from "./useRun";
 import { RIP_MS, ripCover } from "../lib/rip";
 import { flyToPile, pressStamp, thud } from "../lib/motion";
 import { useInfiniteHref } from "../lib/infiniteLink";
+import { EVENT_COLORS, defaultShort, eventHex } from "../lib/events";
+import { openEvent } from "../lib/nav";
 
 
 type Props = { issueId: number; onClose?: () => void };
@@ -70,7 +72,7 @@ function IssueDetailBody({ issueId, onClose }: Props) {
             {ui && ui.format && (
               <div className="kv"><span>FORMAT</span><span>{FORMAT_LABEL[ui.format]}{ui.old_pile ? " · Altbestand" : ""}{ui.format !== "infinite" ? (ui.bought_on ? ` · gekauft ${shortDate(ui.bought_on)}` : " · noch nicht gekauft") : ""}</span></div>
             )}
-            <ArcLine issueId={issueId} />
+            <EventLine issueId={issueId} />
             {ui && <PlanLine issueId={issueId} plan={plan} today={today} />}
             {ui?.status === "read" && ui.read_on && <div className="kv"><span>GELESEN</span><span>{dayLabel(ui.read_on)}</span></div>}
           </div>
@@ -177,6 +179,7 @@ function IssueDetailBody({ issueId, onClose }: Props) {
             {ui.format !== "infinite" && ui.bought_on && (
               <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.setBought(issueId, null))} style={{ alignSelf: "flex-start" }}>Doch nicht gekauft</button>
             )}
+            <EventPick issue={issue} isDC={isDC} />
             <button type="button" className="btn" disabled={busy} style={{ alignSelf: "flex-start" }} onClick={() => run(async () => { await actions.removeIssue(issueId); onClose?.(); })}>Vom Stapel entfernen</button>
           </div>
         </details>
@@ -202,18 +205,57 @@ function PlanLine({ issueId, plan, today }: { issueId: number; plan: { date: str
   return null;
 }
 
-function ArcLine({ issueId }: { issueId: number }) {
-  const { data } = useStore();
-  const line = useMemo(() => {
-    if (!data) return null;
-    const link = data.arcs.find((a) => a.issue_id === issueId);
-    if (!link) return null;
-    const members = data.arcs.filter((a) => a.arc_id === link.arc_id).sort((a, b) => a.position - b.position);
-    const part = members.findIndex((m) => m.issue_id === issueId) + 1;
-    return { name: data.arcNames.get(link.arc_id) ?? "Arc", part, total: members.length };
-  }, [data, issueId]);
-  if (!line) return null;
-  return <div className="kv"><span>ARC</span><span>{line.name} · Teil {line.part} von {line.total}</span></div>;
+function EventLine({ issueId }: { issueId: number }) {
+  const { eventOf } = useStore();
+  const mark = eventOf.get(issueId);
+  if (!mark) return null;
+  return (
+    <div className="kv">
+      <span>EVENT</span>
+      <button type="button" className="evlink" onClick={() => openEvent(mark.event.id)}>
+        <span className="evdot" style={{ background: eventHex(mark.event.color) }} aria-hidden="true" />
+        {mark.event.name} · Teil {mark.part} von {mark.total} <span aria-hidden="true">›</span>
+      </button>
+    </div>
+  );
+}
+
+/** "Zu Event hinzufügen": the events to pick from, or a new one. */
+function EventPick({ issue, isDC }: { issue: Issue; isDC: boolean }) {
+  const { data, events, eventOf } = useStore();
+  const { run, busy } = useRun();
+  const current = eventOf.get(issue.id)?.event.id;
+  const [newName, setNewName] = useState("");
+  if (!data) return null;
+  const ui = data.userIssues.get(issue.id);
+  const format: Format = ui?.format ?? (isDC ? "infinite" : "print");
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <span style={{ fontWeight: 700, fontSize: 14 }}>{current ? "Event" : "Zu Event hinzufügen"}</span>
+      <div className="chips">
+        {events.map((v) => (
+          <button key={v.event.id} type="button" className={`chip ${current === v.event.id ? "on" : ""}`} aria-pressed={current === v.event.id} disabled={busy}
+            onClick={() => run(() => (current === v.event.id ? actions.removeFromEvent(issue.id) : actions.addToEvent(v, issue, ui, format)))}>
+            <span className="evdot" style={{ background: eventHex(v.event.color) }} aria-hidden="true" />{v.event.name}
+          </button>
+        ))}
+      </div>
+      <form className="jump" onSubmit={(e) => {
+        e.preventDefault();
+        const name = newName.trim();
+        if (!name) return;
+        run(async () => {
+          const id = await actions.createEvent(name, defaultShort(name), EVENT_COLORS[events.length % EVENT_COLORS.length].id);
+          await actions.addToEvent({ event: { id, name, short: defaultShort(name), color: "", manual_order: false, created_at: "" }, order: [], read: 0 }, issue, ui, format);
+          setNewName("");
+        });
+      }}>
+        <label className="sr-only" htmlFor={`newev-${issue.id}`}>Neues Event</label>
+        <input id={`newev-${issue.id}`} type="text" placeholder="Neues Event, z. B. DC K.O." value={newName} onChange={(e) => setNewName(e.target.value)} autoComplete="off" style={{ width: "auto", flex: 1 }} />
+        <button type="submit" className="btn" disabled={busy || !newName.trim()}>Anlegen</button>
+      </form>
+    </div>
+  );
 }
 
 /**

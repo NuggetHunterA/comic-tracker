@@ -211,6 +211,13 @@ export const actions = {
   /** Read before the app knew about it: no reading date, never on the pile. */
   markReadEarlier: (issueId: number) =>
     check(supabase.from("user_issues").upsert({ issue_id: issueId, status: "read", format: null, read_on: null, skip_plan: false }, { onConflict: "user_id,issue_id" })),
+  /** Puts a run of issues on the pile as regular (not old pile) issues. */
+  pileAll: async (issueIds: number[], format: Format) => {
+    const rows = issueIds.map((id) => ({ issue_id: id, status: "pile", format, old_pile: false, bought_on: null, read_on: null, skip_plan: false }));
+    for (let i = 0; i < rows.length; i += 500) {
+      await check(supabase.from("user_issues").upsert(rows.slice(i, i + 500), { onConflict: "user_id,issue_id" }));
+    }
+  },
   /** Marks every issue up to a number as read earlier, leaving the pile alone. */
   markReadUpTo: async (issueIds: number[]) => {
     const rows = issueIds.map((id) => ({ issue_id: id, status: "read", format: null, read_on: null, skip_plan: false }));

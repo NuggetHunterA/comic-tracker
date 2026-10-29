@@ -5,6 +5,7 @@ Persönlicher Lese-Tracker für Comics: Plan für jeden Abend, Stapel ungelesene
 - App: Vite + React + TypeScript, installierbar (PWA), gehostet auf GitHub Pages
 - Daten: Supabase (Schema `comics`), Anmeldung automatisch über ein eigenes App-Konto (`VITE_APP_EMAIL`, `VITE_APP_PASSWORD` in Vercel), sonst E-Mail und Passwort
 - Abgleich: Edge Function `supabase/functions/metron`, stündlich per pg_cron
+- „In Infinite öffnen“: Edge Function `supabase/functions/infinite` sucht die Heftseite auf DC Universe Infinite und merkt sie sich; ohne Treffer öffnet der Button die Infinite-Suche
 
 ```sh
 npm install

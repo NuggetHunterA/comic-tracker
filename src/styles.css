@@ -93,7 +93,7 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; text-transform: uppe
 .ratings { display: grid; grid-template-columns: repeat(5, 44px); gap: 8px; }
 .tag { border: 2px solid var(--ink); font-weight: 700; font-size: 12px; padding: 1px 6px; text-transform: uppercase; white-space: nowrap; }
 .iconbtn { width: 44px; height: 44px; border: none; background: transparent; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
-input[type="text"], input[type="number"], input[type="email"], input[type="date"], select {
+input[type="text"], input[type="url"], input[type="number"], input[type="email"], input[type="date"], select {
   min-height: 44px; border: 2px solid var(--ink); background: var(--paper-hi); font-family: var(--ui);
   font-size: 16px; padding: 0 10px; width: 100%; border-radius: 0;
 }

@@ -9,19 +9,22 @@ import { Cover } from "./Cover";
 import { FormatChips } from "./FormatChips";
 import { useRun } from "./useRun";
 import { RIP_MS, ripCover } from "../lib/rip";
+import { useInfiniteHref } from "../lib/infiniteLink";
 
-const INFINITE_URL = "https://www.dcuniverseinfinite.com/";
 
 export function IssueDetail({ issueId, onClose }: { issueId: number; onClose?: () => void }) {
   const { data, today, plan } = useStore();
   const { run, busy, error } = useRun();
   const [pickFormat, setPickFormat] = useState<Format>("infinite");
   const head = useRef<HTMLDivElement>(null);
+  const issue = data?.issues.get(issueId);
+  const series = issue ? data?.series.get(issue.series_id) : undefined;
+  const ui = data?.userIssues.get(issueId);
+  // Look the issue page up only once it is out on Infinite; before that there is nothing to find.
+  const unlocked = !!data && !!issue && (readableFrom(issue.store_date, "infinite", null, data.settings.infinite_delay_days) ?? "9999") <= today;
+  const infiniteHref = useInfiniteHref(issue, series, ui?.format === "infinite" && ui.status !== "read" && unlocked);
   if (!data) return null;
-  const issue = data.issues.get(issueId);
   if (!issue) return <p className="mut">Heft nicht gefunden.</p>;
-  const series = data.series.get(issue.series_id);
-  const ui = data.userIssues.get(issueId);
   const title = issueTitle(issue, series);
   const delay = data.settings.infinite_delay_days;
   const from = ui ? readableFrom(issue.store_date, ui.format, ui.bought_on, delay) : null;
@@ -125,7 +128,7 @@ export function IssueDetail({ issueId, onClose }: { issueId: number; onClose?: (
               <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.skipPlan(issueId, true))}>Aus dem Plan</button>
             )}
             {ui.format === "infinite" && readable && (
-              <a className="btn" href={INFINITE_URL} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }}>In Infinite öffnen</a>
+              <a className="btn" href={infiniteHref} target={infiniteHref.startsWith("intent:") ? undefined : "_blank"} rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }}>In Infinite öffnen</a>
             )}
           </>
         )}

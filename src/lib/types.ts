@@ -55,3 +55,12 @@ export interface Settings {
   infinite_delay_days: number;
   max_per_evening: number;
 }
+
+/** One monthly DC Connect catalog on Infinite; not a Metron issue, so it lives apart. */
+export interface Connect {
+  number: number;
+  url: string;
+  cover_url: string | null;
+  store_date: string | null;
+  read_on: string | null;
+}

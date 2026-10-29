@@ -5,6 +5,9 @@ import { addDays, monthLabel, monthStart, shortDate } from "../lib/dates";
 import { issueTitle } from "../lib/labels";
 import type { Issue, Series } from "../lib/types";
 import { Cover } from "../components/Cover";
+import { ConnectFlyer } from "../components/ConnectFlyer";
+import { useConnect } from "../lib/connect";
+import { infiniteHref } from "../lib/infiniteLink";
 
 export type Verlag = "dc" | "other";
 const PUBLISHERS: Record<Verlag, string[]> = { dc: ["DC Comics"], other: ["Marvel", "Image"] };
@@ -23,6 +26,7 @@ export function KatalogList({ month, setMonth, selected, onSelect }: {
   const [firsts, setFirsts] = useState(false);
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { connect, markRead } = useConnect(today);
 
   useEffect(() => {
     let stale = false;
@@ -79,6 +83,14 @@ export function KatalogList({ month, setMonth, selected, onSelect }: {
         <button type="button" role="tab" aria-selected={verlag === "dc"} className={`seg ${verlag === "dc" ? "on" : ""}`} onClick={() => setVerlag("dc")}>DC</button>
         <button type="button" role="tab" aria-selected={verlag === "other"} className={`seg ${verlag === "other" ? "on" : ""}`} onClick={() => setVerlag("other")}>Marvel + Image</button>
       </div>
+      {verlag === "dc" && connect && (
+        <ConnectFlyer
+          latest={connect.latest}
+          next={connect.next}
+          href={infiniteHref(connect.latest.url)}
+          onRead={() => markRead().catch((e) => setError((e as { message?: string })?.message ?? String(e)))}
+        />
+      )}
       <div className="chips">
         <button type="button" className={`chip ${mine ? "on" : ""}`} aria-pressed={mine} onClick={() => setMine(!mine)}>Meine Serien</button>
         <button type="button" className={`chip ${firsts ? "on" : ""}`} aria-pressed={firsts} onClick={() => setFirsts(!firsts)}>#1 &amp; Neustarts</button>

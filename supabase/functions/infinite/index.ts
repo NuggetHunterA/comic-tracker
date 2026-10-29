@@ -1,12 +1,13 @@
 // Finds an issue's page on DC Universe Infinite, so "In Infinite öffnen" lands on the issue itself.
 // POST {action: "issue", issue_id} → {url} (null when not found; the app then opens a search).
 // POST {action: "set-series", series_id, url} stores a pasted series link (url null clears it).
+// POST {action: "connect"} (cron, x-cron-secret) records the newest DC Connect and the next one's date.
 import { createClient } from "npm:@supabase/supabase-js@2.58.0";
-import { INFINITE_ORIGIN, normalizeSeriesUrl, pickBook, pickSeries } from "../_shared/infinite.ts";
+import { CONNECT_SERIES, INFINITE_ORIGIN, connectBooks, connectDcPages, normalizeSeriesUrl, ogImage, onSaleDate, pickBook, pickSeries } from "../_shared/infinite.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -85,6 +86,53 @@ async function setSeries(seriesId: number, input: unknown): Promise<string | nul
   return url;
 }
 
+const berlinToday = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" }).format(new Date());
+
+/** The issue's dc.com page, under whichever slug DC gave it; "" when there is none yet. */
+async function dcPage(number: number): Promise<string> {
+  for (const url of connectDcPages(number)) {
+    const html = await attempt(url);
+    if (html) return html;
+  }
+  return "";
+}
+
+/**
+ * Records the newest DC Connect on Infinite (link, cover, the day it showed up) and the
+ * next one's on-sale date from dc.com, so the app can say when it comes.
+ */
+async function syncConnect(): Promise<string> {
+  const latest = connectBooks(await page(CONNECT_SERIES))[0];
+  if (!latest) throw new Error("No DC Connect on the Infinite series page");
+  const { data: known, error } = await db.from("connect_issues").select("number, infinite_url, store_date").gte("number", latest.number);
+  if (error) throw error;
+  const row = known?.find((k) => k.number === latest.number);
+  const today = berlinToday();
+  const done: string[] = [];
+
+  if (!row?.infinite_url) {
+    const dc = await dcPage(latest.number);
+    const store = row?.store_date ?? (dc ? onSaleDate(dc) : null);
+    const cover = ogImage(await attempt(latest.url)) ?? (dc ? ogImage(dc) : null);
+    // Found late (e.g. the first run): it was new on its on-sale day, not today.
+    const seen = store && store < today ? store : today;
+    const { error: e } = await db.from("connect_issues").upsert({ number: latest.number, infinite_url: latest.url, cover_url: cover, store_date: store, seen_on: seen, updated_at: new Date().toISOString() });
+    if (e) throw e;
+    done.push(`#${latest.number} new`);
+  }
+
+  const next = latest.number + 1;
+  if (!known?.find((k) => k.number === next)?.store_date) {
+    const date = onSaleDate(await dcPage(next));
+    if (date) {
+      const { error: e } = await db.from("connect_issues").upsert({ number: next, store_date: date, updated_at: new Date().toISOString() });
+      if (e) throw e;
+      done.push(`#${next} on ${date}`);
+    }
+  }
+  return done.join(", ") || "nothing new";
+}
+
 class BadInput extends Error {}
 
 const json = (body: unknown, status = 200) =>
@@ -99,11 +147,17 @@ Deno.serve(async (req) => {
     // empty body
   }
   try {
+    if (body.action === "connect" && req.headers.get("x-cron-secret")) {
+      const { data: secret } = await db.from("sync_state").select("value").eq("key", "cron_secret").maybeSingle();
+      if (!secret?.value || req.headers.get("x-cron-secret") !== secret.value) return json({ error: "unauthorized" }, 401);
+      return json({ message: await syncConnect() });
+    }
     const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
     const { data: user } = await db.auth.getUser(token);
     if (!user?.user) return json({ error: "unauthorized" }, 401);
 
     if (body.action === "issue") return json({ url: await issueLink(Number(body.issue_id)) });
+    if (body.action === "connect") return json({ message: await syncConnect() });
     if (body.action === "set-series") return json({ url: await setSeries(Number(body.series_id), body.url) });
     return json({ error: "unknown action" }, 400);
   } catch (e) {

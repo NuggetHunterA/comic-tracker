@@ -4,6 +4,8 @@ import { addDays, shortDate } from "../lib/dates";
 import { issueTitle } from "../lib/labels";
 import { tapeOn } from "../lib/rip";
 import { Cover } from "./Cover";
+import { useConnect } from "../lib/connect";
+import { infiniteHref } from "../lib/infiniteLink";
 
 const SEEN_KEY = "infinite-drop-seen";
 /** At most this many come out of the box; the list underneath names them all. */
@@ -26,8 +28,8 @@ const markSeen = (day: string) => {
 
 /**
  * First open of the day: a comic box lands on the plan, the lid flies off and
- * today's new issues on DC Universe Infinite (pile and wishlist) are pulled
- * out and taped to the wall. A tap skips to the end.
+ * today's new issues on DC Universe Infinite (pile and wishlist, and a new
+ * DC Connect) are pulled out and taped to the wall. A tap skips to the end.
  */
 export function InfiniteDrop() {
   const { data, items, today } = useStore();
@@ -45,23 +47,37 @@ export function InfiniteDrop() {
       .sort((a, b) => Number(a.ui.status === "wishlist") - Number(b.ui.status === "wishlist") || issueTitle(a.issue, a.series).localeCompare(issueTitle(b.issue, b.series)));
   }, [data, items, today]);
 
+  // A new DC Connect comes out of the box on the day it showed up on Infinite.
+  const { connect } = useConnect(today);
+  const newConnect = connect && connect.seenOn === today && !connect.latest.read_on
+    ? { number: connect.latest.number, cover_url: connect.latest.cover_url, href: infiniteHref(connect.latest.url) }
+    : undefined;
+  const any = fresh.length > 0 || !!newConnect;
+
   useEffect(() => {
-    if (fresh.length > 0 && seenOn() !== today) {
+    if (any && seenOn() !== today) {
       markSeen(today);
       setOpen(true);
     }
-  }, [fresh.length, today]);
+  }, [any, today]);
 
-  if (!open || fresh.length === 0) return null;
-  return <Drop list={fresh} today={today} onClose={() => setOpen(false)} />;
+  if (!open || !any) return null;
+  return <Drop list={fresh} connect={newConnect} today={today} onClose={() => setOpen(false)} />;
 }
 
 type Fresh = ReturnType<typeof useStore>["items"][number];
 
-function Drop({ list, today, onClose }: { list: Fresh[]; today: string; onClose: () => void }) {
+function Drop({ list, connect, today, onClose }: {
+  list: Fresh[];
+  /** Today's DC Connect, pulled out last with its link into Infinite. */
+  connect?: { number: number; cover_url: string | null; href: string };
+  today: string;
+  onClose: () => void;
+}) {
   const root = useRef<HTMLDivElement>(null);
   const anims = useRef<Animation[]>([]);
-  const shown = list.slice(0, SHOWN);
+  const shown = list.slice(0, connect ? SHOWN - 1 : SHOWN);
+  const count = list.length + (connect ? 1 : 0);
 
   useLayoutEffect(() => {
     const el = root.current;
@@ -146,6 +162,14 @@ function Drop({ list, today, onClose }: { list: Fresh[]; today: string; onClose:
               </Cover>
             </div>
           ))}
+          {connect && (
+            <div data-r={[-2, 1.5, -1][shown.length]}>
+              <span className={`cv big ${connect.cover_url ? "img" : ""}`} style={{ backgroundImage: connect.cover_url ? `url("${connect.cover_url}")` : undefined }} aria-hidden="true">
+                <span className="tape" />
+                <span className="pinned"><span className="pin" /><span className="lbl">KATALOG</span></span>
+              </span>
+            </div>
+          )}
         </div>
         <ul className="drop-list">
           {list.map((i) => (
@@ -154,11 +178,18 @@ function Drop({ list, today, onClose }: { list: Fresh[]; today: string; onClose:
               {i.ui.status === "wishlist" && <span className="w">WUNSCH</span>}
             </li>
           ))}
+          {connect && (
+            <li>
+              <a className="drop-connect" href={connect.href} target={connect.href.startsWith("intent:") ? undefined : "_blank"} rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+                DC Connect #{connect.number}<span className="w">KATALOG ÖFFNEN</span>
+              </a>
+            </li>
+          )}
         </ul>
         <button type="button" className="btn hot drop-go" onClick={(e) => { e.stopPropagation(); close(); }}>Zum Plan</button>
       </div>
       <div className="drop-box" aria-hidden="true">
-        <div className="front"><span className="hole" /><span className="lbl">Neu auf Infinite<b>{list.length}</b></span></div>
+        <div className="front"><span className="hole" /><span className="lbl">Neu auf Infinite<b>{count}</b></span></div>
         <div className="lid" />
       </div>
     </div>

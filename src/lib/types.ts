@@ -1,4 +1,4 @@
-export type Format = "print" | "infinite" | "digital";
+export type Format = "print" | "infinite";
 export type Status = "wishlist" | "expected" | "pile" | "read" | "dismissed";
 
 export interface Series {

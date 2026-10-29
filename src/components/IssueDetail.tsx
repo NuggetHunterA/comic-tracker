@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { actions, useStore } from "../lib/store";
 import { addDays, dateLabel, dayLabel, shortDate } from "../lib/dates";
@@ -8,6 +8,7 @@ import type { Format, Issue } from "../lib/types";
 import { Cover } from "./Cover";
 import { FormatChips } from "./FormatChips";
 import { useRun } from "./useRun";
+import { RIP_MS, ripCover } from "../lib/rip";
 
 const INFINITE_URL = "https://www.dcuniverseinfinite.com/";
 
@@ -15,6 +16,7 @@ export function IssueDetail({ issueId, onClose }: { issueId: number; onClose?: (
   const { data, today, plan } = useStore();
   const { run, busy, error } = useRun();
   const [pickFormat, setPickFormat] = useState<Format>("infinite");
+  const head = useRef<HTMLDivElement>(null);
   if (!data) return null;
   const issue = data.issues.get(issueId);
   if (!issue) return <p className="mut">Heft nicht gefunden.</p>;
@@ -29,8 +31,8 @@ export function IssueDetail({ issueId, onClose }: { issueId: number; onClose?: (
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
-      <div style={{ display: "flex", gap: 22, alignItems: "flex-start" }}>
-        <Cover issue={issue} readable={!ui || readable || ui.status === "read"} showNumber={false} tape style={{ width: 126, flex: "none", transform: "rotate(-1.5deg)" }} />
+      <div ref={head} style={{ display: "flex", gap: 22, alignItems: "flex-start" }}>
+        <Cover issue={issue} readable={!ui || readable || ui.status === "read"} showNumber={false} tape={ui?.status === "read" ? "GELESEN" : true} style={{ width: 126, flex: "none", transform: "rotate(-1.5deg)" }} />
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
           <h2 style={{ fontSize: 30, lineHeight: 1 }}>{title}</h2>
           <div style={{ display: "flex", flexDirection: "column", marginTop: 6 }}>
@@ -64,15 +66,19 @@ export function IssueDetail({ issueId, onClose }: { issueId: number; onClose?: (
 
       {(!ui || ui.status === "wishlist" || ui.status === "dismissed") && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <span style={{ fontWeight: 700, fontSize: 15 }}>Wie willst du es lesen?</span>
-          <FormatChips value={pickFormat} onChange={setPickFormat} allowInfinite={isDC} />
-          {pickFormat === "infinite" && issue.store_date && addDays(issue.store_date, delay) > today && (
+          {isDC && (
+            <>
+              <span style={{ fontWeight: 700, fontSize: 15 }}>Wie willst du es lesen?</span>
+              <FormatChips value={pickFormat} onChange={setPickFormat} />
+            </>
+          )}
+          {isDC && pickFormat === "infinite" && issue.store_date && addDays(issue.store_date, delay) > today && (
             <span className="mut" style={{ fontSize: 14 }}>Kommt in den Stapel und wird am <span className="stk">{shortDate(addDays(issue.store_date, delay))}</span> lesbar.</span>
           )}
-          {pickFormat === "infinite" && issue.store_date && addDays(issue.store_date, delay) <= today && (
+          {isDC && pickFormat === "infinite" && issue.store_date && addDays(issue.store_date, delay) <= today && (
             <span className="mut" style={{ fontSize: 14 }}>Kommt in den Stapel und ist sofort lesbar.</span>
           )}
-          {pickFormat !== "infinite" && <span className="mut" style={{ fontSize: 14 }}>Kommt in den Stapel. Lesbar, sobald du es als gekauft markierst.</span>}
+          {(!isDC || pickFormat !== "infinite") && <span className="mut" style={{ fontSize: 14 }}>Kommt in den Stapel. Lesbar, sobald du es als gekauft markierst.</span>}
         </div>
       )}
 
@@ -80,13 +86,13 @@ export function IssueDetail({ issueId, onClose }: { issueId: number; onClose?: (
         {!ui || ui.status === "dismissed" ? (
           <>
             <button type="button" className="btn solid" style={{ flex: "1 1 100%" }} disabled={busy} onClick={() => run(() => actions.markReadEarlier(issueId))}>Schon gelesen</button>
-            <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.addIssue(issueId, "pile", isDC ? pickFormat : pickFormat === "infinite" ? "print" : pickFormat))}>Einplanen</button>
+            <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.addIssue(issueId, "pile", isDC ? pickFormat : "print"))}>Einplanen</button>
             <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.addIssue(issueId, "wishlist", null))}>Auf die Wunschliste</button>
             {!followed && <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.follow(issue.series_id, isDC ? "infinite" : "print"))}>Serie folgen</button>}
           </>
         ) : ui.status === "wishlist" ? (
           <>
-            <button type="button" className="btn solid" style={{ flex: 1 }} disabled={busy} onClick={() => run(() => actions.addIssue(issueId, "pile", pickFormat))}>Auf den Stapel</button>
+            <button type="button" className="btn solid" style={{ flex: 1 }} disabled={busy} onClick={() => run(() => actions.addIssue(issueId, "pile", isDC ? pickFormat : "print"))}>Auf den Stapel</button>
             <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.markReadEarlier(issueId))}>Schon gelesen</button>
             <button type="button" className="btn" disabled={busy} onClick={() => run(async () => { await actions.dismissIssue(issueId); onClose?.(); })}>Von der Liste</button>
           </>
@@ -96,7 +102,13 @@ export function IssueDetail({ issueId, onClose }: { issueId: number; onClose?: (
             onClick={() => run(() => (!ui.format && !ui.read_on ? actions.removeIssue(issueId) : actions.markUnread(issueId)))}>Doch nicht gelesen</button>
         ) : (
           <>
-            {readable && <button type="button" className="btn solid" style={{ flex: 1 }} disabled={busy} onClick={() => run(() => actions.markRead(issueId, today))}>Gelesen</button>}
+            {readable && <button type="button" className="btn solid" style={{ flex: 1 }} disabled={busy} onClick={async () => {
+              // Tear the cover off, then tape it back on marked as read.
+              const cv = head.current?.querySelector<HTMLElement>(".cv");
+              const rip = cv ? ripCover(cv) : null;
+              await run(() => Promise.all([actions.markRead(issueId, today), new Promise((done) => window.setTimeout(done, RIP_MS))]));
+              rip?.restore();
+            }}>Gelesen</button>}
             {ui.format !== "infinite" && !ui.bought_on && (
               <button type="button" className="btn solid" style={{ flex: 1 }} disabled={busy} onClick={() => run(() => actions.setBought(issueId, today))}>Gekauft</button>
             )}
@@ -124,7 +136,7 @@ export function IssueDetail({ issueId, onClose }: { issueId: number; onClose?: (
 
       {ui && ui.status !== "read" && ui.status !== "dismissed" && (
         <details>
-          <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 14, minHeight: 32 }}>Format oder Stapel ändern</summary>
+          <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 14, minHeight: 32 }}>{isDC ? "Format oder Stapel ändern" : "Stapel ändern"}</summary>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingTop: 8 }}>
             <FormatChips value={ui.format ?? "print"} allowInfinite={isDC} onChange={(f) => run(() => actions.setFormat(issueId, f))} />
             {ui.format !== "infinite" && ui.bought_on && (

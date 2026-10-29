@@ -128,7 +128,7 @@ export function StapelList({ wide, sel, onSelect }: { wide: boolean; sel: Stapel
               <Cover issue={i.issue} readable={false} showNumber={false} style={{ width: 40, flex: "none" }} />
               <span style={{ flex: 1, display: "flex", flexDirection: "column" }}>
                 <strong style={{ fontSize: 16 }}>{issueTitle(i.issue, i.series)}</strong>
-                <span className="mut" style={{ fontSize: 14 }}>{i.ui.format === "infinite" ? "Infinite" : i.ui.format === "print" ? "Print · noch nicht gekauft" : "Digital · noch nicht gekauft"}</span>
+                <span className="mut" style={{ fontSize: 14 }}>{i.ui.format === "infinite" ? "Infinite" : "Print · noch nicht gekauft"}</span>
               </span>
               {i.readableFrom ? <span className="stk">AB {shortDate(i.readableFrom)}</span> : i.issue.store_date ? <span className="d mut" style={{ fontSize: 13 }}>{shortDate(i.issue.store_date)}</span> : null}
             </button>
@@ -152,7 +152,7 @@ export function StapelSeries({ seriesId, onSelect }: { seriesId: number; onSelec
   const read = items.filter((i) => i.issue.series_id === seriesId && i.ui.status === "read").length;
   const series = data?.series.get(seriesId);
   const firstDay = plan.find((e) => e.entries.some((x) => list.some((i) => i.issue.id === x.issueId)))?.date;
-  const formats = [...new Set(list.map((i) => i.ui.format))].map((f) => (f === "infinite" ? "Infinite" : f === "print" ? "Print" : "Digital"));
+  const formats = [...new Set(list.map((i) => i.ui.format))].map((f) => (f === "infinite" ? "Infinite" : "Print"));
   return (
     <>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { metron, supabase } from "../lib/supabase";
 import { actions, useStore } from "../lib/store";
 import { shortDate } from "../lib/dates";
-import { issueTitle, seriesLong } from "../lib/labels";
+import { FORMAT_LABEL, issueTitle, seriesLong } from "../lib/labels";
 import type { Issue, Series } from "../lib/types";
 import { Cover } from "../components/Cover";
 import { FormatChips } from "../components/FormatChips";
@@ -93,7 +93,7 @@ export function SerienList({ tab, setTab, sel, onSelect }: {
                     <strong style={{ fontSize: 16 }}>{seriesLong(s)}</strong>
                     <span className="d mut" style={{ fontSize: 12 }}>{f.paused ? "PAUSIERT" : `${openCount(f.series_id)} OFFEN${ended ? " · ENDET" : ""}`}</span>
                   </span>
-                  <span className="tag">{f.default_format === "infinite" ? "Infinite" : f.default_format === "print" ? "Print" : "Digital"}</span>
+                  <span className="tag">{FORMAT_LABEL[f.default_format]}</span>
                 </button>
               );
             })}
@@ -184,7 +184,7 @@ export function SeriesDetail({ seriesId, found, onSelect, onGone }: {
       </div>
       <AllIssuesButton range={range} onClick={() => onSelect({ kind: "all", id: seriesId })} />
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: "auto" }}>
-        <span style={{ fontWeight: 700, fontSize: 15 }}>Standardformat für neue Hefte</span>
+        {isDC && <span style={{ fontWeight: 700, fontSize: 15 }}>Standardformat für neue Hefte</span>}
         <FormatChips value={f.default_format} allowInfinite={isDC} onChange={(fmt) => run(() => actions.setDefaultFormat(seriesId, fmt))} />
         <div style={{ display: "flex", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
           <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.setPaused(seriesId, !f.paused))}>{f.paused ? "Fortsetzen" : "Pausieren"}</button>
@@ -227,7 +227,7 @@ function UnfollowedSeries({ seriesId, found, onSelect }: { seriesId: number; fou
         <span className="d mut" style={{ fontSize: 13 }}>{meta}</span>
       </div>
       <button type="button" className="btn hot" disabled={busy} onClick={() => run(follow)}>{busy ? "Folge …" : "Folgen"}</button>
-      <span className="mut" style={{ fontSize: 14, marginTop: -6 }}>Ab dann landen neue Hefte als {isDC ? "Infinite" : "Print"} auf dem Stapel. Das Format kannst du danach ändern.</span>
+      <span className="mut" style={{ fontSize: 14, marginTop: -6 }}>{isDC ? "Ab dann landen neue Hefte als Infinite auf dem Stapel. Das Format kannst du danach ändern." : "Ab dann landen neue Hefte als Print auf dem Stapel."}</span>
       {error && <p role="alert" className="stk" style={{ whiteSpace: "normal" }}>{error}</p>}
       <AllIssues seriesId={seriesId} title={false}
         onSelect={(id) => onSelect({ kind: "issue", id, back: { kind: "series", id: seriesId, found } })} />

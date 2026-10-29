@@ -1,8 +1,8 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// Served from GitHub Pages under /comic-tracker/
+// Vercel serves the app at the domain root; GitHub Pages sets BASE=/comic-tracker/.
 export default defineConfig({
-  base: '/comic-tracker/',
+  base: process.env.BASE ?? '/',
   plugins: [react()],
 })

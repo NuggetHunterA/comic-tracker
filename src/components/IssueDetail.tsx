@@ -9,14 +9,26 @@ import { Cover } from "./Cover";
 import { FormatChips } from "./FormatChips";
 import { useRun } from "./useRun";
 import { RIP_MS, ripCover } from "../lib/rip";
+import { flyToPile, pressStamp, thud } from "../lib/motion";
 import { useInfiniteHref } from "../lib/infiniteLink";
 
 
-export function IssueDetail({ issueId, onClose }: { issueId: number; onClose?: () => void }) {
+type Props = { issueId: number; onClose?: () => void };
+
+/** A fresh detail per issue, so a moment just played for one issue does not replay on the next. */
+export function IssueDetail(props: Props) {
+  return <IssueDetailBody key={props.issueId} {...props} />;
+}
+
+function IssueDetailBody({ issueId, onClose }: Props) {
   const { data, today, plan } = useStore();
   const { run, busy, error } = useRun();
   const [pickFormat, setPickFormat] = useState<Format>("infinite");
   const head = useRef<HTMLDivElement>(null);
+  // What was just done here, so only that plays its moment (not every time the detail opens).
+  const [stamped, setStamped] = useState<number | null>(null);
+  const [pinned, setPinned] = useState(false);
+  const [justFollowed, setJustFollowed] = useState(false);
   const issue = data?.issues.get(issueId);
   const series = issue ? data?.series.get(issue.series_id) : undefined;
   const ui = data?.userIssues.get(issueId);
@@ -32,13 +44,22 @@ export function IssueDetail({ issueId, onClose }: { issueId: number; onClose?: (
   const isDC = (series?.publisher ?? "").toLowerCase().startsWith("dc");
   const followed = data.followed.some((f) => f.series_id === issue.series_id);
   const followedFormat = data.followed.find((f) => f.series_id === issue.series_id)?.default_format;
+  const cover = () => head.current?.querySelector<HTMLElement>(".cv");
+  const toPile = () => {
+    const cv = cover();
+    if (cv) void flyToPile(cv);
+    return run(() => actions.addIssue(issueId, "pile", isDC ? pickFormat : "print"));
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
       <div ref={head} style={{ display: "flex", gap: 22, alignItems: "flex-start" }}>
-        <Cover issue={issue} readable={!ui || readable || ui.status === "read"} showNumber={false} tape={ui?.status === "read" ? "GELESEN" : true} style={{ width: 126, flex: "none", transform: "rotate(-1.5deg)" }} />
+        <Cover issue={issue} readable={!ui || readable || ui.status === "read"} showNumber={false} tape={ui?.status === "read" ? "GELESEN" : true} style={{ width: 126, flex: "none", transform: "rotate(-1.5deg)" }}>
+          {ui?.status === "read" && ui.rating && <span key={ui.rating} className={`stamp grade ${stamped === ui.rating ? "hit" : ""}`}>{ui.rating}<b>/10</b></span>}
+          {ui?.status === "wishlist" && <span className={`pinned ${pinned ? "swing" : ""}`}><span className="pin" /><span className="lbl">WUNSCH</span></span>}
+        </Cover>
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
-          <h2 style={{ fontSize: 30, lineHeight: 1 }}>{title}</h2>
+          <h2 style={{ fontSize: 30, lineHeight: 1 }}>{justFollowed && followed ? <span className="marker fresh">{title}</span> : title}</h2>
           <div style={{ display: "flex", flexDirection: "column", marginTop: 6 }}>
             {issue.store_date && (
               <div className="kv"><span>ERSCHEINT</span><span>{dateLabel(issue.store_date, today)}</span></div>
@@ -62,7 +83,14 @@ export function IssueDetail({ issueId, onClose }: { issueId: number; onClose?: (
           <div role="radiogroup" aria-label="Bewertung von 1 bis 10" className="ratings">
             {Array.from({ length: 10 }, (_, k) => k + 1).map((n) => (
               <button key={n} type="button" role="radio" aria-checked={ui.rating === n} className={`rt ${ui.rating === n ? "on" : ""}`} disabled={busy}
-                onClick={() => run(() => actions.rate(issueId, ui.rating === n ? null : n))}>{n}</button>
+                onClick={(e) => {
+                  if (ui.rating !== n) {
+                    pressStamp(e.currentTarget);
+                    setStamped(n);
+                    thud(cover(), 230);
+                  }
+                  run(() => actions.rate(issueId, ui.rating === n ? null : n));
+                }}>{n}</button>
             ))}
           </div>
         </div>
@@ -90,13 +118,13 @@ export function IssueDetail({ issueId, onClose }: { issueId: number; onClose?: (
         {!ui || ui.status === "dismissed" ? (
           <>
             <button type="button" className="btn solid" style={{ flex: "1 1 100%" }} disabled={busy} onClick={() => run(() => actions.markReadEarlier(issueId))}>Schon gelesen</button>
-            <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.addIssue(issueId, "pile", isDC ? pickFormat : "print"))}>Einplanen</button>
-            <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.addIssue(issueId, "wishlist", null))}>Auf die Wunschliste</button>
-            {!followed && <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.follow(issue.series_id, isDC ? "infinite" : "print"))}>Serie folgen</button>}
+            <button type="button" className="btn" disabled={busy} onClick={toPile}>Einplanen</button>
+            <button type="button" className="btn" disabled={busy} onClick={() => { setPinned(true); run(() => actions.addIssue(issueId, "wishlist", null)); }}>Auf die Wunschliste</button>
+            {!followed && <button type="button" className="btn" disabled={busy} onClick={async () => { if (await run(() => actions.follow(issue.series_id, isDC ? "infinite" : "print"))) setJustFollowed(true); }}>Serie folgen</button>}
           </>
         ) : ui.status === "wishlist" ? (
           <>
-            <button type="button" className="btn solid" style={{ flex: 1 }} disabled={busy} onClick={() => run(() => actions.addIssue(issueId, "pile", isDC ? pickFormat : "print"))}>Auf den Stapel</button>
+            <button type="button" className="btn solid" style={{ flex: 1 }} disabled={busy} onClick={toPile}>Auf den Stapel</button>
             <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.markReadEarlier(issueId))}>Schon gelesen</button>
             <button type="button" className="btn" disabled={busy} onClick={() => run(async () => { await actions.dismissIssue(issueId); onClose?.(); })}>Von der Liste</button>
           </>

@@ -8,6 +8,7 @@ import { BackButton, Detail, EmptyDetail } from "./components/Detail";
 import { AllIssues } from "./components/AllIssues";
 import { seriesLong } from "./lib/labels";
 import { IssueDetail } from "./components/IssueDetail";
+import { InfiniteDrop } from "./components/InfiniteDrop";
 import { ImportForm } from "./components/ImportForm";
 import { Login } from "./screens/Login";
 import { PlanScreen } from "./screens/PlanScreen";
@@ -162,6 +163,7 @@ function Shell() {
         </main>
         {data && detail}
       </div>
+      {data && <InfiniteDrop />}
     </div>
   );
 }

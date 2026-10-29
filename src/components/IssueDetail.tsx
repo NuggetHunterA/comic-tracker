@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { metron, supabase } from "../lib/supabase";
 import { actions, useStore, eventDone } from "../lib/store";
 import { addDays, dateLabel, dayLabel, shortDate } from "../lib/dates";
-import { FORMAT_LABEL, issueTitle } from "../lib/labels";
+import { FORMAT_LABEL, issueTitle, seriesLong } from "../lib/labels";
 import { readableFrom } from "../lib/plan";
 import type { Format, Issue } from "../lib/types";
 import { Cover } from "./Cover";
@@ -12,10 +12,10 @@ import { RIP_MS, ripCover } from "../lib/rip";
 import { flyToPile, pressStamp, thud } from "../lib/motion";
 import { useInfiniteHref } from "../lib/infiniteLink";
 import { EVENT_COLORS, defaultShort, eventHex } from "../lib/events";
-import { openEvent } from "../lib/nav";
+import { openEvent, openRun } from "../lib/nav";
 
 
-type Props = { issueId: number; onClose?: () => void; fromRun?: boolean };
+type Props = { issueId: number; onClose?: () => void };
 
 /** A fresh detail per issue, so a moment just played for one issue does not replay on the next. */
 export function IssueDetail(props: Props) {
@@ -30,7 +30,6 @@ const ICON = {
   x: <path d="M6 6l12 12M18 6L6 18" />,
   back: <path d="M9 7L4 12l5 5M4 12h11a5 5 0 0 1 0 10h-3" />,
   pin: <><circle cx="12" cy="8" r="4" /><path d="M12 12v9" /></>,
-  pile: <path d="M4 8h16M4 13h16M4 18h16" />,
   dots: <><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></>,
 };
 type Slot = { icon: keyof typeof ICON; label: string; title: string; onClick?: () => void; href?: string };
@@ -53,7 +52,7 @@ function useDesk() {
   return desk;
 }
 
-function IssueDetailBody({ issueId, onClose, fromRun }: Props) {
+function IssueDetailBody({ issueId, onClose }: Props) {
   const { data, today, plan } = useStore();
   const { run, busy, error } = useRun();
   const [pickFormat, setPickFormat] = useState<Format>("infinite");
@@ -106,12 +105,9 @@ function IssueDetailBody({ issueId, onClose, fromRun }: Props) {
   const cand: Slot[] = [];
   const more: More[] = [];
   if (fresh) {
-    // In a series' run, an issue that is already out was most likely read long ago.
-    const oldInRun = !!fromRun && !!issue.store_date && issue.store_date <= today;
-    go = oldInRun ? { label: "Schon gelesen", onClick: readEarlier } : { label: "Einplanen", onClick: toPile };
-    cand.push(oldInRun ? { icon: "pile", label: "Einplanen", title: "Einplanen", onClick: toPile } : { icon: "check", label: "Gelesen", title: "Schon gelesen", onClick: readEarlier });
+    go = { label: "Einplanen", onClick: toPile };
+    cand.push({ icon: "check", label: "Gelesen", title: "Schon gelesen", onClick: readEarlier });
     cand.push({ icon: "pin", label: "Wunsch", title: "Auf die Wunschliste", onClick: toWishlist });
-    if (!followed) more.push({ label: "Serie folgen", onClick: follow });
   } else if (ui.status === "wishlist") {
     go = { label: "Auf den Stapel", onClick: toPile };
     cand.push({ icon: "check", label: "Gelesen", title: "Schon gelesen", onClick: readEarlier });
@@ -133,6 +129,7 @@ function IssueDetailBody({ issueId, onClose, fromRun }: Props) {
       ? { icon: "back", label: "Einplanen", title: "Wieder einplanen", onClick: () => run(() => actions.skipPlan(issueId, false)) }
       : { icon: "x", label: "Aus Plan", title: "Aus dem Plan", onClick: () => run(() => actions.skipPlan(issueId, true)) });
   }
+  if (!followed) more.push({ label: "Serie folgen", onClick: follow });
   const slots = cand.slice(0, 2);
   // What does not fit in the bar goes first under Mehr.
   more.unshift(...cand.slice(2).map((c) => ({ label: c.title, onClick: c.onClick! })));
@@ -156,11 +153,17 @@ function IssueDetailBody({ issueId, onClose, fromRun }: Props) {
         <div className="dmeta">
           <h2>{justFollowed && followed ? <span className="marker fresh">{title}</span> : title}</h2>
           <div className="facts">
+            <div className="kv">
+              <span>SERIE</span>
+              <button type="button" className="evlink" onClick={() => openRun(issue.series_id, issueId)}>
+                {seriesLong(series)} · Alle Hefte <span aria-hidden="true">›</span>
+              </button>
+            </div>
             {issue.store_date && (
               <div className="kv"><span>ERSCHEINT</span><span>{dateLabel(issue.store_date, today)}</span></div>
             )}
             <WriterLine issueId={issueId} />
-            {isDC && issue.store_date && (!ui || ui.format === "infinite") && (
+            {isDC && issue.store_date && (!ui || (ui.format === "infinite" && ui.status !== "read")) && (
               <div className="kv"><span>INFINITE</span>{addDays(issue.store_date, delay) <= today ? <span>Verfügbar</span> : <span><span className="stk">AB {shortDate(addDays(issue.store_date, delay))}</span></span>}</div>
             )}
             {ui && ui.format && (

@@ -128,4 +128,59 @@ describe("buildPlan", () => {
     const plan = buildPlan({ issues: [issue(1, 10, 1, { readableFrom: null })], pins: [], today: TODAY, maxPerEvening: 3 });
     expect(plan).toEqual([{ date: TODAY, entries: [] }]);
   });
+
+  describe("pinned arc issues", () => {
+    const arc = (pos: number) => ({ arcs: [{ arcId: 7, position: pos }] });
+    const days = (plan: ReturnType<typeof buildPlan>) => plan.map((e) => [e.date, e.entries.map((x) => x.issueId)]);
+
+    it("pulls the later parts of the arc onto the pinned evening", () => {
+      const issues = [
+        issue(1, 20, 1, { storeDate: "2023-01-01" }),
+        issue(2, 20, 2, { storeDate: "2023-01-01" }),
+        issue(11, 10, 1, arc(1)),
+        issue(12, 10, 2, arc(2)),
+        issue(13, 10, 3, arc(3)),
+      ];
+      const plan = buildPlan({ issues, pins: [{ issueId: 12, evening: TODAY, slot: 1 }], today: TODAY, maxPerEvening: 3 });
+      expect(days(plan)).toEqual([
+        ["2026-10-29", [12, 13, 1]],
+        ["2026-10-30", [2, 11]],
+      ]);
+    });
+
+    it("puts parts that do not fit first on the next evenings", () => {
+      const issues = [
+        issue(1, 20, 1, { storeDate: "2023-01-01" }),
+        ...[1, 2, 3, 4, 5].map((n) => issue(10 + n, 10, n, arc(n))),
+      ];
+      const plan = buildPlan({ issues, pins: [{ issueId: 11, evening: TODAY, slot: 1 }], today: TODAY, maxPerEvening: 2 });
+      expect(days(plan)).toEqual([
+        ["2026-10-29", [11, 12]],
+        ["2026-10-30", [13, 14]],
+        ["2026-10-31", [15, 1]],
+      ]);
+    });
+
+    it("does not read later parts before a pin on a later evening", () => {
+      const issues = [1, 2, 3].map((n) => issue(10 + n, 10, n, arc(n)));
+      const plan = buildPlan({ issues, pins: [{ issueId: 12, evening: "2026-10-31", slot: 1 }], today: TODAY, maxPerEvening: 3 });
+      expect(days(plan)).toEqual([
+        ["2026-10-29", [11]],
+        ["2026-10-31", [12, 13]],
+      ]);
+    });
+
+    it("waits for an unreadable part and keeps arc order", () => {
+      const issues = [
+        issue(11, 10, 1, arc(1)),
+        issue(12, 10, 2, { ...arc(2), readableFrom: "2026-10-30" }),
+        issue(13, 10, 3, arc(3)),
+      ];
+      const plan = buildPlan({ issues, pins: [{ issueId: 11, evening: TODAY, slot: 1 }], today: TODAY, maxPerEvening: 3 });
+      expect(days(plan)).toEqual([
+        ["2026-10-29", [11]],
+        ["2026-10-30", [12, 13]],
+      ]);
+    });
+  });
 });

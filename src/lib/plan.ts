@@ -7,6 +7,8 @@
 //   order (crossovers included); the plan switches series only after an arc.
 // - Without arc data a series is read in blocks of BLOCK_SIZE issues.
 // - Pinned entries stay where the reader put them; past pins move to today.
+// - The later parts of a pinned issue's arc follow it: same evening if there
+//   is room, otherwise first thing on the next evenings.
 import { addDays } from "./dates";
 import type { Format } from "./types";
 
@@ -134,8 +136,9 @@ export function buildPlan(opts: {
     if (!pinsByDay.has(day)) pinsByDay.set(day, []);
     pinsByDay.get(day)!.push(p);
   }
+  let followers = arcFollowers(opts.issues, opts.pins, pinned, today);
   let queue = readingQueue(
-    opts.issues.filter((i) => !pinned.has(i.id)),
+    opts.issues.filter((i) => !pinned.has(i.id) && !followers.some((f) => f.issue.id === i.id)),
     opts.blockSize,
   );
   const lastPinDay = [...pinsByDay.keys()].sort().pop() ?? today;
@@ -150,6 +153,18 @@ export function buildPlan(opts: {
     const placed = new Set<number>();
     const blockedSeries = new Set<number>();
     const blockedArcs = new Set<number>();
+    const blockedFollowArcs = new Set<number>();
+    for (const f of followers) {
+      if (placed.size >= capacity) break;
+      if (f.from > date || blockedFollowArcs.has(f.arcId)) continue;
+      if (f.issue.readableFrom !== null && f.issue.readableFrom <= date) {
+        placed.add(f.issue.id);
+        entries.push({ issueId: f.issue.id, pinned: false });
+      } else {
+        blockedFollowArcs.add(f.arcId);
+        blockedSeries.add(f.issue.seriesId);
+      }
+    }
     for (const i of queue) {
       if (placed.size >= capacity) break;
       const blocked = blockedSeries.has(i.seriesId) || i.arcs.some((a) => blockedArcs.has(a.arcId));
@@ -162,9 +177,39 @@ export function buildPlan(opts: {
       }
     }
     queue = queue.filter((i) => !placed.has(i.id));
+    followers = followers.filter((f) => !placed.has(f.issue.id));
     if (entries.length || d === 0) evenings.push({ date, entries });
-    const anyPlaceable = queue.some((i) => i.readableFrom !== null);
+    const anyPlaceable = queue.some((i) => i.readableFrom !== null) || followers.some((f) => f.issue.readableFrom !== null);
     if (!anyPlaceable && date >= lastPinDay) break;
   }
   return evenings;
+}
+
+/**
+ * Later parts of the arcs that pinned issues belong to, in pin order, then arc
+ * order. Each may not be read before the evening its pin is on.
+ */
+function arcFollowers(issues: PlanIssue[], pins: Pin[], pinned: Set<number>, today: string) {
+  const byId = new Map(issues.map((i) => [i.id, i]));
+  const out: { issue: PlanIssue; arcId: number; from: string }[] = [];
+  const taken = new Set<number>();
+  const ordered = pins
+    .map((p) => ({ ...p, evening: p.evening < today ? today : p.evening }))
+    .sort((a, b) => a.evening.localeCompare(b.evening) || a.slot - b.slot);
+  for (const p of ordered) {
+    const head = byId.get(p.issueId);
+    if (!head) continue;
+    for (const a of head.arcs) {
+      const later = issues
+        .filter((i) => !pinned.has(i.id) && !taken.has(i.id))
+        .map((i) => ({ i, pos: i.arcs.find((x) => x.arcId === a.arcId)?.position }))
+        .filter((x): x is { i: PlanIssue; pos: number } => x.pos !== undefined && x.pos > a.position)
+        .sort((x, y) => x.pos - y.pos);
+      for (const { i } of later) {
+        taken.add(i.id);
+        out.push({ issue: i, arcId: a.arcId, from: p.evening });
+      }
+    }
+  }
+  return out;
 }

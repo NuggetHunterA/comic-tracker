@@ -16,7 +16,7 @@ export function ConnectFlyer({ latest, next, href, onRead }: {
   if (latest.read_on) {
     return (
       <p className="connect-line">
-        <span><b>DC Connect #{latest.number}</b> gelesen</span>
+        <span><a href={href} target={target} rel="noreferrer"><b>DC Connect #{latest.number}</b></a> gelesen</span>
         <span className="d">{next?.store_date ? `#${next.number} AB ${shortDate(next.store_date)}` : `#${latest.number + 1} ANFANG NÄCHSTEN MONAT`}</span>
       </p>
     );

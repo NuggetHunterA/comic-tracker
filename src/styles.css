@@ -370,3 +370,4 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-weight: 700;
 .drop-connect { color: var(--paper); text-decoration: underline; text-decoration-color: var(--pink); text-decoration-thickness: 2px; text-underline-offset: 3px; }
 .drop-connect:hover { color: var(--pink); }
 .drop-connect .w { background: var(--pink) !important; text-decoration: none; display: inline-block; }
+.connect-line a { text-decoration: underline; text-decoration-color: var(--pink); text-decoration-thickness: 2px; text-underline-offset: 3px; }

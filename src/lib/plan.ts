@@ -6,7 +6,8 @@
 // - A series is read in number order. Story arcs are read in one go, in arc
 //   order (crossovers included); the plan switches series only after an arc.
 // - Without arc data a series is read in blocks of BLOCK_SIZE issues.
-// - Pinned entries stay where the reader put them; past pins move to today.
+// - Pinned entries stay where the reader put them. A pin whose evening has
+//   passed unread no longer counts; the issue goes back into the order.
 //   Later issues of a pinned issue's series are not read before its evening.
 // - The later parts of a pinned issue's arc follow it: same evening if there
 //   is room, otherwise first thing on the next evenings.
@@ -130,20 +131,20 @@ export function buildPlan(opts: {
   blockSize?: number;
 }): Evening[] {
   const { today, maxPerEvening } = opts;
-  const pinned = new Set(opts.pins.map((p) => p.issueId));
+  const pins = opts.pins.filter((p) => p.evening >= today);
+  const pinned = new Set(pins.map((p) => p.issueId));
   const pinsByDay = new Map<string, Pin[]>();
-  for (const p of opts.pins) {
-    const day = p.evening < today ? today : p.evening;
-    if (!pinsByDay.has(day)) pinsByDay.set(day, []);
-    pinsByDay.get(day)!.push(p);
+  for (const p of pins) {
+    if (!pinsByDay.has(p.evening)) pinsByDay.set(p.evening, []);
+    pinsByDay.get(p.evening)!.push(p);
   }
-  let followers = arcFollowers(opts.issues, opts.pins, pinned, today);
+  let followers = arcFollowers(opts.issues, pins, pinned);
   let queue = readingQueue(
     opts.issues.filter((i) => !pinned.has(i.id) && !followers.some((f) => f.issue.id === i.id)),
     opts.blockSize,
   );
   const lastPinDay = [...pinsByDay.keys()].sort().pop() ?? today;
-  const notBefore = notBeforePins(opts.issues, opts.pins, pinned, today);
+  const notBefore = notBeforePins(opts.issues, pins, pinned);
 
   const evenings: Evening[] = [];
   for (let d = 0; d <= HORIZON_DAYS; d++) {
@@ -199,13 +200,11 @@ export function buildPlan(opts: {
  * Later parts of the arcs that pinned issues belong to, in pin order, then arc
  * order. Each may not be read before the evening its pin is on.
  */
-function arcFollowers(issues: PlanIssue[], pins: Pin[], pinned: Set<number>, today: string) {
+function arcFollowers(issues: PlanIssue[], pins: Pin[], pinned: Set<number>) {
   const byId = new Map(issues.map((i) => [i.id, i]));
   const out: { issue: PlanIssue; arcId: number; from: string }[] = [];
   const taken = new Set<number>();
-  const ordered = pins
-    .map((p) => ({ ...p, evening: p.evening < today ? today : p.evening }))
-    .sort((a, b) => a.evening.localeCompare(b.evening) || a.slot - b.slot);
+  const ordered = [...pins].sort((a, b) => a.evening.localeCompare(b.evening) || a.slot - b.slot);
   for (const p of ordered) {
     const head = byId.get(p.issueId);
     if (!head) continue;
@@ -225,17 +224,34 @@ function arcFollowers(issues: PlanIssue[], pins: Pin[], pinned: Set<number>, tod
 }
 
 /** For unpinned issues: the latest evening an earlier issue of the same series is pinned to. */
-function notBeforePins(issues: PlanIssue[], pins: Pin[], pinned: Set<number>, today: string) {
+function notBeforePins(issues: PlanIssue[], pins: Pin[], pinned: Set<number>) {
   const byId = new Map(issues.map((i) => [i.id, i]));
   const out = new Map<number, string>();
   for (const p of pins) {
     const head = byId.get(p.issueId);
     if (!head) continue;
-    const evening = p.evening < today ? today : p.evening;
     for (const i of issues) {
       if (pinned.has(i.id) || i.seriesId !== head.seriesId || byNumber(head, i) >= 0) continue;
-      if (evening > (out.get(i.id) ?? "")) out.set(i.id, evening);
+      if (p.evening > (out.get(i.id) ?? "")) out.set(i.id, p.evening);
     }
+  }
+  return out;
+}
+
+/**
+ * Series that stall because their next issue has no reading date (print not
+ * bought, no store date): that issue and how many later ones wait behind it.
+ */
+export function stalledSeries(issues: PlanIssue[]): { issue: PlanIssue; behind: number }[] {
+  const bySeries = new Map<number, PlanIssue[]>();
+  for (const i of [...issues].sort(byNumber)) {
+    if (!bySeries.has(i.seriesId)) bySeries.set(i.seriesId, []);
+    bySeries.get(i.seriesId)!.push(i);
+  }
+  const out: { issue: PlanIssue; behind: number }[] = [];
+  for (const list of bySeries.values()) {
+    const k = list.findIndex((i) => i.readableFrom === null);
+    if (k >= 0 && k < list.length - 1) out.push({ issue: list[k], behind: list.length - 1 - k });
   }
   return out;
 }

@@ -121,6 +121,8 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-weight: 700;
 .evening { display: flex; gap: 12px; align-items: baseline; padding: 10px 0; border-bottom: 1px solid var(--rule); }
 .evening:last-child { border-bottom: none; }
 .evening .d { width: 84px; flex: none; font-size: 14px; }
+.waitrow { background: none; border: none; border-bottom: 1px solid var(--rule); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.waitrow:hover strong { text-decoration: underline; text-underline-offset: 3px; }
 .blackbar { background: var(--ink); color: var(--paper); padding: 10px 12px; display: flex; gap: 12px; align-items: center; }
 .blackbar .cv { width: 40px; flex: none; border-color: var(--paper); }
 .grid { display: grid; gap: 16px 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }

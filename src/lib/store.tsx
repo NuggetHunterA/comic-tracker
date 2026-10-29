@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { buildPlan, readableFrom, type Evening, type PlanIssue } from "./plan";
+import { buildPlan, readableFrom, stalledSeries, type Evening, type PlanIssue } from "./plan";
 import { supabase } from "./supabase";
 import { todayIso } from "./dates";
 import type { ArcLink, Followed, Format, Issue, PlanPin, Series, Settings, UserIssue } from "./types";
@@ -31,6 +31,8 @@ interface Store {
   today: string;
   items: Item[];
   plan: Evening[];
+  /** Series held up by an issue without a reading date, and how many issues wait behind it. */
+  stalled: { issueId: number; behind: number }[];
   reload: () => Promise<void>;
   /** Merges catalog rows into the local cache, e.g. after a catalog query. */
   remember: (issues: Issue[], series: Series[]) => void;
@@ -158,8 +160,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return out;
   }, [data, today]);
 
-  const plan = useMemo<Evening[]>(() => {
-    if (!data) return [];
+  const { plan, stalled } = useMemo(() => {
+    if (!data) return { plan: [] as Evening[], stalled: [] };
     const arcsByIssue = new Map<number, { arcId: number; position: number }[]>();
     for (const a of data.arcs) {
       if (!arcsByIssue.has(a.issue_id)) arcsByIssue.set(a.issue_id, []);
@@ -179,10 +181,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const pins = data.pins
       .filter((p) => p.pinned && openIds.has(p.issue_id))
       .map((p) => ({ issueId: p.issue_id, evening: p.evening, slot: p.slot }));
-    return buildPlan({ issues: planIssues, pins, today, maxPerEvening: data.settings.max_per_evening });
+    return {
+      plan: buildPlan({ issues: planIssues, pins, today, maxPerEvening: data.settings.max_per_evening }),
+      stalled: stalledSeries(planIssues).map((s) => ({ issueId: s.issue.id, behind: s.behind })),
+    };
   }, [data, items, today]);
 
-  const value = useMemo(() => ({ data, error, today, items, plan, reload, remember }), [data, error, today, items, plan, reload, remember]);
+  const value = useMemo(
+    () => ({ data, error, today, items, plan, stalled, reload, remember }),
+    [data, error, today, items, plan, stalled, reload, remember],
+  );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

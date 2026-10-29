@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPlan, readableFrom, readingQueue, type PlanIssue } from "./plan";
+import { buildPlan, readableFrom, readingQueue, stalledSeries, type PlanIssue } from "./plan";
 
 const TODAY = "2026-10-29";
 
@@ -89,7 +89,7 @@ describe("buildPlan", () => {
     ]);
   });
 
-  it("keeps pins, moves past pins to today and counts them toward the maximum", () => {
+  it("keeps pins, drops past pins and counts pins toward the maximum", () => {
     const issues = [1, 2, 3, 4].map((n) => issue(n, 10, n));
     const plan = buildPlan({
       issues,
@@ -100,15 +100,14 @@ describe("buildPlan", () => {
       today: TODAY,
       maxPerEvening: 3,
     });
-    expect(plan[0]).toEqual({
-      date: TODAY,
-      entries: [
-        { issueId: 4, pinned: true },
-        { issueId: 2, pinned: false },
-        { issueId: 3, pinned: false },
-      ],
-    });
-    expect(plan[1].entries).toEqual([{ issueId: 1, pinned: true }]);
+    // The past pin on #4 is gone; #2 to #4 wait for the pinned #1 tomorrow.
+    expect(plan[0]).toEqual({ date: TODAY, entries: [] });
+    expect(plan[1].entries).toEqual([
+      { issueId: 1, pinned: true },
+      { issueId: 2, pinned: false },
+      { issueId: 3, pinned: false },
+    ]);
+    expect(plan[2].entries).toEqual([{ issueId: 4, pinned: false }]);
   });
 
   it("waits for Infinite dates without skipping ahead in a series", () => {
@@ -182,5 +181,35 @@ describe("buildPlan", () => {
         ["2026-10-30", [12, 13]],
       ]);
     });
+  });
+
+  it("does not read later issues of a series before a pinned earlier one", () => {
+    const issues = [
+      issue(13, 10, 113),
+      issue(14, 10, 114),
+      issue(15, 10, 115),
+      issue(16, 10, 116),
+      issue(21, 20, 1, { storeDate: "2025-01-01" }),
+    ];
+    const plan = buildPlan({ issues, pins: [{ issueId: 13, evening: "2026-10-30", slot: 1 }], today: TODAY, maxPerEvening: 3 });
+    expect(plan.map((e) => [e.date, e.entries.map((x) => x.issueId)])).toEqual([
+      ["2026-10-29", [21]],
+      ["2026-10-30", [13, 14, 15]],
+      ["2026-10-31", [16]],
+    ]);
+  });
+});
+
+describe("stalledSeries", () => {
+  it("names the first issue without a date that holds back later ones", () => {
+    const stalled = stalledSeries([
+      issue(1, 10, 1),
+      issue(2, 10, 2, { readableFrom: null }),
+      issue(3, 10, 3),
+      issue(4, 10, 4, { readableFrom: null }),
+      issue(11, 20, 1),
+      issue(12, 20, 2, { readableFrom: null }),
+    ]);
+    expect(stalled.map((s) => [s.issue.id, s.behind])).toEqual([[2, 2]]);
   });
 });

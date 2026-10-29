@@ -9,7 +9,7 @@ import { RIP_RELEASE_MS, ripCover, tapeOn } from "../lib/rip";
 const wait = (ms: number) => new Promise((done) => window.setTimeout(done, ms));
 
 export function PlanScreen({ selected, onSelect }: { selected: number | null; onSelect: (id: number) => void }) {
-  const { data, plan, today, items } = useStore();
+  const { data, plan, stalled, today, items } = useStore();
   const { run, busy, error } = useRun();
 
   const view = useMemo(() => {
@@ -22,14 +22,19 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
       .sort((a, b) => a.readableFrom!.localeCompare(b.readableFrom!))[0];
     const pileCount = items.filter((i) => (i.ui.status === "pile" || i.ui.status === "expected") && i.readable).length;
     const readToday = items.filter((i) => i.ui.status === "read" && i.ui.read_on === today).length;
-    return { tonight, next, soon, pileCount, readToday };
-  }, [data, plan, today, items]);
+    const byId = new Map(items.map((i) => [i.issue.id, i]));
+    const waiting = stalled.flatMap(({ issueId, behind }) => {
+      const it = byId.get(issueId);
+      return it ? [{ it, behind }] : [];
+    });
+    return { tonight, next, soon, pileCount, readToday, waiting };
+  }, [data, plan, stalled, today, items]);
 
   const wall = useRef<HTMLElement>(null);
   useSlideOver(wall);
 
   if (!view) return null;
-  const { tonight, next, soon, pileCount, readToday } = view;
+  const { tonight, next, soon, pileCount, readToday, waiting } = view;
 
   // The cover tears off right away; the plan reshuffles once the halves are falling clear.
   const markRead = async (issueId: number, card: HTMLElement | null) => {
@@ -90,6 +95,19 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
         </section>
       )}
 
+      {waiting.length > 0 && (
+        <section aria-label="Serien, die warten" style={{ borderTop: "3px solid var(--ink)", display: "flex", flexDirection: "column" }}>
+          {waiting.map(({ it, behind }) => (
+            <button key={it.issue.id} type="button" className="evening waitrow" onClick={() => onSelect(it.issue.id)}>
+              <span className="d">WARTET</span>
+              <span style={{ fontSize: 16 }}>
+                <strong>{issueTitle(it.issue, it.series)}</strong> {waitReason(it.ui.format)}, dahinter {behind === 1 ? "1 Heft" : `${behind} Hefte`}
+              </span>
+            </button>
+          ))}
+        </section>
+      )}
+
       {soon && (
         <button type="button" className="blackbar" onClick={() => onSelect(soon.issue.id)} style={{ border: "none", textAlign: "left", cursor: "pointer", marginTop: 4 }}>
           <Cover issue={soon.issue} readable={false} showNumber={false} />
@@ -102,6 +120,12 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
       )}
     </>
   );
+}
+
+function waitReason(format: string | null): string {
+  if (format === "print") return "ist nicht als gekauft markiert";
+  if (format === "infinite") return "hat noch kein Erscheinungsdatum";
+  return "hat kein Format";
 }
 
 /** Slides the remaining covers over (FLIP) and tapes newly planned ones on. */

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { infinite, metron, supabase } from "../lib/supabase";
 import { forgetInfiniteLinks } from "../lib/infiniteLink";
-import { actions, useStore } from "../lib/store";
+import { actions, useStore, eventDone, type EventView } from "../lib/store";
 import { shortDate } from "../lib/dates";
 import { FORMAT_LABEL, issueTitle, seriesLong } from "../lib/labels";
 import type { Issue, Series } from "../lib/types";
@@ -64,13 +64,33 @@ export function SerienList({ tab, setTab, sel, onSelect }: {
   const wishCount = wishIssues.length + data.wishlistSeries.length;
   const openCount = (sid: number) => items.filter((i) => i.issue.series_id === sid && (i.ui.status === "pile" || i.ui.status === "expected")).length;
 
+  const done = events.filter(eventDone);
+  const open = events.filter((v) => !eventDone(v));
+  const eventRow = (v: EventView) => {
+    const on = sel?.kind === "event" && sel.id === v.event.id;
+    const next = v.order.find((i) => data.userIssues.get(i.id)?.status !== "read");
+    const info = v.order.length === 0 ? "NOCH LEER"
+      : v.read === v.order.length ? "DURCHGELESEN"
+      : `${v.read} VON ${v.order.length} GELESEN${v.read === 0 ? " · NOCH NICHT ANGEFANGEN" : ""}`;
+    return (
+      <button key={v.event.id} type="button" className={`evrow ${on ? "on" : ""}`} aria-current={on ? "true" : undefined} onClick={() => onSelect({ kind: "event", id: v.event.id })}>
+        <span style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+          <h3 style={{ fontSize: 24 }}>{v.event.name}</h3>
+          <Ticks view={v} small />
+        </span>
+        <span className="d mut" style={{ fontSize: 12 }}>{info}{next && v.read > 0 ? ` · WEITER MIT ${issueTitle(next, data.series.get(next.series_id)).toUpperCase()}` : ""}</span>
+        {v.order.length > 0 && <span className="strip">{v.order.slice(0, 9).map((i) => <Cover key={i.id} issue={i} showNumber={false} eventMark={false} readable={items.some((x) => x.issue.id === i.id && x.readable && x.ui.status !== "read")} />)}</span>}
+      </button>
+    );
+  };
+
   return (
     <>
       <h1 style={{ fontSize: 44 }}>Meine Serien</h1>
       <div role="tablist" className="tabs">
         <button type="button" role="tab" aria-selected={tab === "serien"} className={`seg ${tab === "serien" ? "on" : ""}`} onClick={() => setTab("serien")}>Serien · {data.followed.length}</button>
         <button type="button" role="tab" aria-selected={tab === "wunsch"} className={`seg ${tab === "wunsch" ? "on" : ""}`} onClick={() => setTab("wunsch")}>Wunsch · {wishCount}</button>
-        <button type="button" role="tab" aria-selected={tab === "events"} className={`seg ${tab === "events" ? "on" : ""}`} onClick={() => setTab("events")}>Events · {events.length}</button>
+        <button type="button" role="tab" aria-selected={tab === "events"} className={`seg ${tab === "events" ? "on" : ""}`} onClick={() => setTab("events")}>Events · {open.length}</button>
       </div>
 
       {tab === "events" ? (
@@ -83,24 +103,16 @@ export function SerienList({ tab, setTab, sel, onSelect }: {
             </div>
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {events.map((v) => {
-              const on = sel?.kind === "event" && sel.id === v.event.id;
-              const next = v.order.find((i) => data.userIssues.get(i.id)?.status !== "read");
-              const info = v.order.length === 0 ? "NOCH LEER"
-                : v.read === v.order.length ? "DURCHGELESEN"
-                : `${v.read} VON ${v.order.length} GELESEN${v.read === 0 ? " · NOCH NICHT ANGEFANGEN" : ""}`;
-              return (
-                <button key={v.event.id} type="button" className={`evrow ${on ? "on" : ""}`} aria-current={on ? "true" : undefined} onClick={() => onSelect({ kind: "event", id: v.event.id })}>
-                  <span style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                    <h3 style={{ fontSize: 24 }}>{v.event.name}</h3>
-                    <Ticks view={v} small />
-                  </span>
-                  <span className="d mut" style={{ fontSize: 12 }}>{info}{next && v.read > 0 ? ` · WEITER MIT ${issueTitle(next, data.series.get(next.series_id)).toUpperCase()}` : ""}</span>
-                  {v.order.length > 0 && <span className="strip">{v.order.slice(0, 9).map((i) => <Cover key={i.id} issue={i} showNumber={false} eventMark={false} readable={items.some((x) => x.issue.id === i.id && x.readable && x.ui.status !== "read")} />)}</span>}
-                </button>
-              );
-            })}
+            {open.map(eventRow)}
           </div>
+          {done.length > 0 && (
+            <details open={done.some((v) => sel?.kind === "event" && sel.id === v.event.id)}>
+              <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 15, minHeight: 40, display: "flex", alignItems: "center" }}>Durchgelesen · {done.length}</summary>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, opacity: 0.75 }}>
+                {done.map(eventRow)}
+              </div>
+            </details>
+          )}
         </section>
       ) : tab === "serien" ? (
         <>

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { actions, useStore } from "../lib/store";
+import { actions, useStore, eventDone } from "../lib/store";
 import { addDays, dateLabel, dayLabel, shortDate } from "../lib/dates";
 import { FORMAT_LABEL, issueTitle } from "../lib/labels";
 import { readableFrom } from "../lib/plan";
@@ -285,7 +285,8 @@ function EventPick({ issue, isDC }: { issue: Issue; isDC: boolean }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <span style={{ fontWeight: 700, fontSize: 14 }}>{current ? "Event" : "Zu Event hinzufügen"}</span>
       <div className="chips">
-        {events.map((v) => (
+        {/* Read-through events drop out; the issue's own event stays so it can be taken out. */}
+        {events.filter((v) => !eventDone(v) || v.event.id === current).map((v) => (
           <button key={v.event.id} type="button" className={`chip ${current === v.event.id ? "on" : ""}`} aria-pressed={current === v.event.id} disabled={busy}
             onClick={() => run(() => (current === v.event.id ? actions.removeFromEvent(issue.id) : actions.addToEvent(v, issue, ui, format)))}>
             <span className="evdot" style={{ background: eventHex(v.event.color) }} aria-hidden="true" />{v.event.name}

@@ -15,6 +15,8 @@ import { PlanScreen } from "./screens/PlanScreen";
 import { StapelList, StapelSeries, type StapelSel } from "./screens/StapelScreen";
 import { KatalogList } from "./screens/KatalogScreen";
 import { SerienList, SeriesDetail, type SerienSel, type SerienTab } from "./screens/SerienScreen";
+import { EventDetail } from "./components/EventDetail";
+import { onOpenEvent } from "./lib/nav";
 
 const WIDE = "(min-width: 700px)";
 
@@ -95,6 +97,12 @@ function Shell() {
   const closeStapel = useCallback(() => setStapelSel(null), []);
   const closeKatalog = useCallback(() => setKatalogSel(null), []);
   const closeSerien = useCallback(() => setSerienSel(null), []);
+  // The detail's event line jumps here from any tab.
+  useEffect(() => onOpenEvent((id) => {
+    setSerienTab("events");
+    setSerienSel({ kind: "event", id });
+    window.location.hash = "serien";
+  }), []);
 
   let list: React.ReactNode = null;
   let detail: React.ReactNode = null;
@@ -137,6 +145,7 @@ function Shell() {
     list = <SerienList wide={wide} tab={serienTab} setTab={setSerienTab} sel={serienSel} onSelect={setSerienSel} />;
     const s = serienSel;
     const body =
+      s?.kind === "event" ? <EventDetail key={s.id} eventId={s.id} onGone={closeSerien} /> :
       s?.kind === "series" ? <SeriesDetail key={s.id} seriesId={s.id} found={s.found} onSelect={setSerienSel} onGone={closeSerien} /> :
       s?.kind === "all" ? (
         <AllIssues key={s.id} seriesId={s.id} sel={s.sel}
@@ -149,7 +158,7 @@ function Shell() {
           <IssueDetail issueId={s.id} onClose={closeSerien} />
         </>
       ) :
-      wide ? <EmptyDetail text={serienTab === "serien" ? "Wähl links eine Serie." : "Wähl links ein Heft von der Wunschliste."} /> : null;
+      wide ? <EmptyDetail text={serienTab === "serien" ? "Wähl links eine Serie." : serienTab === "events" ? "Wähl links ein Event oder leg ein neues an." : "Wähl links ein Heft von der Wunschliste."} /> : null;
     detail = body ? <Detail wide={wide} label="Serie im Detail" onClose={closeSerien}>{body}</Detail> : null;
   }
 

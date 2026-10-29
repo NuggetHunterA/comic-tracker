@@ -11,13 +11,15 @@ import { SeriesSearch, type FoundSeries } from "../components/SeriesSearch";
 import { useRun } from "../components/useRun";
 import { AllIssues, useSeriesRange } from "../components/AllIssues";
 import { isFresh, markFresh } from "../lib/motion";
+import { NewEvent, Ticks } from "../components/EventDetail";
 
 export type SerienSel =
   | { kind: "series"; id: number; found?: FoundSeries }
   | { kind: "all"; id: number; sel?: number }
   | { kind: "issue"; id: number; back?: SerienSel }
+  | { kind: "event"; id: number }
   | null;
-export type SerienTab = "serien" | "wunsch";
+export type SerienTab = "serien" | "wunsch" | "events";
 
 interface Relaunch { old: number; series: Series; first: Issue | null }
 
@@ -53,7 +55,7 @@ function useRelaunches(): Relaunch[] {
 export function SerienList({ tab, setTab, sel, onSelect }: {
   wide: boolean; tab: SerienTab; setTab: (t: SerienTab) => void; sel: SerienSel; onSelect: (s: SerienSel) => void;
 }) {
-  const { data, items } = useStore();
+  const { data, items, events } = useStore();
   const { run, busy } = useRun();
   const [searching, setSearching] = useState(false);
   const followedIds = useMemo(() => new Set(data?.followed.map((f) => f.series_id)), [data]);
@@ -67,10 +69,40 @@ export function SerienList({ tab, setTab, sel, onSelect }: {
       <h1 style={{ fontSize: 44 }}>Meine Serien</h1>
       <div role="tablist" className="tabs">
         <button type="button" role="tab" aria-selected={tab === "serien"} className={`seg ${tab === "serien" ? "on" : ""}`} onClick={() => setTab("serien")}>Serien · {data.followed.length}</button>
-        <button type="button" role="tab" aria-selected={tab === "wunsch"} className={`seg ${tab === "wunsch" ? "on" : ""}`} onClick={() => setTab("wunsch")}>Wunschliste · {wishCount}</button>
+        <button type="button" role="tab" aria-selected={tab === "wunsch"} className={`seg ${tab === "wunsch" ? "on" : ""}`} onClick={() => setTab("wunsch")}>Wunsch · {wishCount}</button>
+        <button type="button" role="tab" aria-selected={tab === "events"} className={`seg ${tab === "events" ? "on" : ""}`} onClick={() => setTab("events")}>Events · {events.length}</button>
       </div>
 
-      {tab === "serien" ? (
+      {tab === "events" ? (
+        <section aria-label="Events" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <NewEvent onMade={(id) => onSelect({ kind: "event", id })} />
+          {events.length === 0 && (
+            <div className="empty">
+              <strong>Noch keine Events.</strong>
+              <span className="mut">Ein Event ist eine Lesereihenfolge über mehrere Serien, etwa ein Crossover. Der Plan liest es am Stück, und sobald du angefangen hast, kommt es jeden Abend zuerst dran.</span>
+            </div>
+          )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {events.map((v) => {
+              const on = sel?.kind === "event" && sel.id === v.event.id;
+              const next = v.order.find((i) => data.userIssues.get(i.id)?.status !== "read");
+              const info = v.order.length === 0 ? "NOCH LEER"
+                : v.read === v.order.length ? "DURCHGELESEN"
+                : `${v.read} VON ${v.order.length} GELESEN${v.read === 0 ? " · NOCH NICHT ANGEFANGEN" : ""}`;
+              return (
+                <button key={v.event.id} type="button" className={`evrow ${on ? "on" : ""}`} aria-current={on ? "true" : undefined} onClick={() => onSelect({ kind: "event", id: v.event.id })}>
+                  <span style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                    <h3 style={{ fontSize: 24 }}>{v.event.name}</h3>
+                    <Ticks view={v} small />
+                  </span>
+                  <span className="d mut" style={{ fontSize: 12 }}>{info}{next && v.read > 0 ? ` · WEITER MIT ${issueTitle(next, data.series.get(next.series_id)).toUpperCase()}` : ""}</span>
+                  {v.order.length > 0 && <span className="strip">{v.order.slice(0, 9).map((i) => <Cover key={i.id} issue={i} showNumber={false} eventMark={false} readable={items.some((x) => x.issue.id === i.id && x.readable && x.ui.status !== "read")} />)}</span>}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ) : tab === "serien" ? (
         <>
           <SeriesSearch followed={followedIds} onActive={setSearching}
             picked={sel?.kind === "series" ? sel.id : undefined}

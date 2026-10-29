@@ -45,8 +45,18 @@ export interface PlanPin {
   pinned: boolean;
 }
 
-export interface ArcLink {
-  arc_id: number;
+/** A reading order across series, kept by hand. */
+export interface EventRow {
+  id: number;
+  name: string;
+  short: string;
+  color: string;
+  manual_order: boolean;
+  created_at: string;
+}
+
+export interface EventIssue {
+  event_id: number;
   issue_id: number;
   position: number;
 }

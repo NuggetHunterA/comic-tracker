@@ -5,11 +5,14 @@ import { issueTitle, runsLabel } from "../lib/labels";
 import { Cover } from "../components/Cover";
 import { useRun } from "../components/useRun";
 import { RIP_RELEASE_MS, ripCover, tapeOn } from "../lib/rip";
+import { eventHex } from "../lib/events";
+import type { EventMark } from "../lib/store";
+import type { Issue } from "../lib/types";
 
 const wait = (ms: number) => new Promise((done) => window.setTimeout(done, ms));
 
 export function PlanScreen({ selected, onSelect }: { selected: number | null; onSelect: (id: number) => void }) {
-  const { data, plan, stalled, today, items } = useStore();
+  const { data, plan, stalled, today, items, events, eventOf } = useStore();
   const { run, busy, error } = useRun();
 
   const view = useMemo(() => {
@@ -27,14 +30,22 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
       const it = byId.get(issueId);
       return it ? [{ it, behind }] : [];
     });
-    return { tonight, next, soon, pileCount, readToday, waiting };
-  }, [data, plan, stalled, today, items]);
+    // A started event whose next issue is not readable yet waits for it.
+    const paused = events.flatMap((v) => {
+      if (v.read === 0) return [];
+      const it = v.order.map((i) => byId.get(i.id)).find((x) => x && x.ui.status !== "read");
+      return it && !it.readable ? [{ v, it, part: v.order.findIndex((i) => i.id === it.issue.id) + 1 }] : [];
+    });
+    return { tonight, next, soon, pileCount, readToday, waiting, paused };
+  }, [data, plan, stalled, today, items, events]);
 
   const wall = useRef<HTMLElement>(null);
   useSlideOver(wall);
 
   if (!view) return null;
-  const { tonight, next, soon, pileCount, readToday, waiting } = view;
+  const { tonight, next, soon, pileCount, readToday, waiting, paused } = view;
+  const marks = tonight.map(({ issue }) => eventOf.get(issue.id));
+  const banded = marks.some(Boolean);
 
   // The cover tears off right away; the plan reshuffles once the halves are falling clear.
   const markRead = async (issueId: number, card: HTMLElement | null) => {
@@ -58,11 +69,12 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
         <>
           <span style={{ fontSize: 16 }}>Am Stück: <strong>{runsLabel(tonight)}</strong></span>
           <section aria-label="Heute Abend lesen" className="tonight" ref={wall}>
-            {tonight.map(({ issue, series }) => (
+            {tonight.map(({ issue, series }, k) => (
               <div key={issue.id} data-id={issue.id}>
+                {banded && <Band marks={marks} k={k} />}
                 <button type="button" onClick={() => onSelect(issue.id)} aria-label={`${issueTitle(issue, series)} öffnen`}
                   style={{ padding: 0, border: "none", background: "none", cursor: "pointer" }}>
-                  <Cover issue={issue} tape big className={selected === issue.id ? "selected" : ""}
+                  <Cover issue={issue} tape={!marks[k]} eventMark={false} big className={selected === issue.id ? "selected" : ""}
                     style={selected === issue.id ? { outline: "3px solid var(--pink)", outlineOffset: 3 } : undefined} />
                 </button>
                 <button type="button" className="btn" disabled={busy} aria-label={`${issueTitle(issue, series)} als gelesen markieren`}
@@ -89,14 +101,25 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
           {next.map((e, k) => (
             <div key={e.date} className="evening">
               <span className={`d ${k === next.length - 1 ? "mut" : ""}`}>{dayLabel(e.date)}</span>
-              <span className={k === next.length - 1 ? "mut" : ""} style={{ fontSize: 16 }}>{runsLabel(e.list)}</span>
+              <span className={k === next.length - 1 ? "mut" : ""} style={{ fontSize: 16 }}>
+                <EventTags issues={e.list.map((x) => x.issue)} marks={eventOf} />{runsLabel(e.list)}
+              </span>
             </div>
           ))}
         </section>
       )}
 
-      {waiting.length > 0 && (
+      {(waiting.length > 0 || paused.length > 0) && (
         <section aria-label="Serien, die warten" style={{ borderTop: "3px solid var(--ink)", display: "flex", flexDirection: "column" }}>
+          {paused.map(({ v, it, part }) => (
+            <button key={`e${v.event.id}`} type="button" className="evening waitrow" onClick={() => onSelect(it.issue.id)}>
+              <span className="d">WARTET</span>
+              <span style={{ fontSize: 16 }}>
+                <span className="btag" style={{ background: eventHex(v.event.color) }}>{v.event.short}</span>
+                <strong>{v.event.name}</strong> Teil {part}, {issueTitle(it.issue, it.series)} {it.readableFrom ? `ist ab ${shortDate(it.readableFrom)} lesbar` : waitReason(it.ui.format)}
+              </span>
+            </button>
+          ))}
           {waiting.map(({ it, behind }) => (
             <button key={it.issue.id} type="button" className="evening waitrow" onClick={() => onSelect(it.issue.id)}>
               <span className="d">WARTET</span>
@@ -118,6 +141,52 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
           <span className="stk" style={{ transform: "rotate(2deg)" }}>AB {shortDate(soon.readableFrom!)}</span>
         </button>
       )}
+    </>
+  );
+}
+
+/**
+ * Tonight's event band, one piece per cover: the pieces of covers from the
+ * same event run into one strip, with the name at its start and the parts at its end.
+ */
+function Band({ marks, k }: { marks: (EventMark | undefined)[]; k: number }) {
+  const m = marks[k];
+  if (!m) return <span className="evband none" aria-hidden="true" />;
+  const same = (j: number) => marks[j]?.event.id === m.event.id;
+  const first = !same(k - 1);
+  const last = !same(k + 1);
+  let a = k;
+  while (same(a - 1)) a--;
+  let b = k;
+  while (same(b + 1)) b++;
+  const from = marks[a]!.part;
+  const to = marks[b]!.part;
+  const parts = from === to ? `TEIL ${from}/${m.total}` : `TEIL ${from}–${to}/${m.total}`;
+  return (
+    <span className={`evband ${first ? "first" : ""} ${last ? "last" : "join"}`} style={{ background: eventHex(m.event.color) }}>
+      {first && <span className="n">{m.event.name}</span>}
+      {last && <span className="t">{parts}</span>}
+    </span>
+  );
+}
+
+/** "K.O. 6–7" in front of an evening that goes on with an event. */
+function EventTags({ issues, marks }: { issues: Issue[]; marks: Map<number, EventMark> }) {
+  const runs = new Map<number, { m: EventMark; from: number; to: number }>();
+  for (const i of issues) {
+    const m = marks.get(i.id);
+    if (!m) continue;
+    const r = runs.get(m.event.id);
+    if (r) r.to = m.part;
+    else runs.set(m.event.id, { m, from: m.part, to: m.part });
+  }
+  return (
+    <>
+      {[...runs.values()].map(({ m, from, to }) => (
+        <span key={m.event.id} className="btag" style={{ background: eventHex(m.event.color) }}>
+          {m.event.short} {from === to ? from : `${from}–${to}`}/{m.total}
+        </span>
+      ))}
     </>
   );
 }

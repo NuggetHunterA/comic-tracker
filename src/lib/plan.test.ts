@@ -11,7 +11,7 @@ function issue(id: number, seriesId: number, n: number, extra: Partial<PlanIssue
     storeDate: "2024-01-01",
     oldPile: false,
     readableFrom: "2024-01-01",
-    arcs: [],
+    event: null,
     ...extra,
   };
 }
@@ -43,7 +43,7 @@ describe("readingQueue", () => {
     expect(nums(q)).toEqual(["20#4", "20#5", "10#1", "10#2"]);
   });
 
-  it("uses blocks per series when there are no arcs", () => {
+  it("uses blocks per series when there are no events", () => {
     const issues = [1, 2, 3, 4, 5, 6].flatMap((n) => [issue(n, 10, n), issue(100 + n, 20, n, { storeDate: "2024-02-01" })]);
     const q = readingQueue(issues, 4);
     expect(nums(q)).toEqual([
@@ -55,7 +55,7 @@ describe("readingQueue", () => {
   });
 
   it("reads an arc in one go, then switches series", () => {
-    const arc = (pos: number) => ({ arcs: [{ arcId: 7, position: pos }] });
+    const arc = (pos: number) => ({ event: { id: 7, position: pos } });
     const q = readingQueue([
       issue(1, 10, 1, arc(1)),
       issue(2, 10, 2, arc(2)),
@@ -70,9 +70,9 @@ describe("readingQueue", () => {
 
   it("follows crossover order across series", () => {
     const q = readingQueue([
-      issue(1, 10, 1, { arcs: [{ arcId: 9, position: 1 }] }),
-      issue(2, 20, 50, { arcs: [{ arcId: 9, position: 2 }], storeDate: "2024-03-01" }),
-      issue(3, 10, 2, { arcs: [{ arcId: 9, position: 3 }] }),
+      issue(1, 10, 1, { event: { id: 9, position: 1 } }),
+      issue(2, 20, 50, { event: { id: 9, position: 2 }, storeDate: "2024-03-01" }),
+      issue(3, 10, 2, { event: { id: 9, position: 3 } }),
       issue(4, 20, 49, { storeDate: "2024-02-01" }),
     ]);
     expect(nums(q)).toEqual(["10#1", "20#50", "10#2", "20#49"]);
@@ -128,11 +128,11 @@ describe("buildPlan", () => {
     expect(plan).toEqual([{ date: TODAY, entries: [] }]);
   });
 
-  describe("pinned arc issues", () => {
-    const arc = (pos: number) => ({ arcs: [{ arcId: 7, position: pos }] });
+  describe("pinned event issues", () => {
+    const arc = (pos: number) => ({ event: { id: 7, position: pos } });
     const days = (plan: ReturnType<typeof buildPlan>) => plan.map((e) => [e.date, e.entries.map((x) => x.issueId)]);
 
-    it("pulls the later parts of the arc onto the pinned evening", () => {
+    it("starts the event at its first open part and pulls the rest along", () => {
       const issues = [
         issue(1, 20, 1, { storeDate: "2023-01-01" }),
         issue(2, 20, 2, { storeDate: "2023-01-01" }),
@@ -142,8 +142,8 @@ describe("buildPlan", () => {
       ];
       const plan = buildPlan({ issues, pins: [{ issueId: 12, evening: TODAY, slot: 1 }], today: TODAY, maxPerEvening: 3 });
       expect(days(plan)).toEqual([
-        ["2026-10-29", [12, 13, 1]],
-        ["2026-10-30", [2, 11]],
+        ["2026-10-29", [11, 12, 13]],
+        ["2026-10-30", [1, 2]],
       ]);
     });
 
@@ -164,12 +164,12 @@ describe("buildPlan", () => {
       const issues = [1, 2, 3].map((n) => issue(10 + n, 10, n, arc(n)));
       const plan = buildPlan({ issues, pins: [{ issueId: 12, evening: "2026-10-31", slot: 1 }], today: TODAY, maxPerEvening: 3 });
       expect(days(plan)).toEqual([
-        ["2026-10-29", [11]],
-        ["2026-10-31", [12, 13]],
+        ["2026-10-29", []],
+        ["2026-10-31", [11, 12, 13]],
       ]);
     });
 
-    it("waits for an unreadable part and keeps arc order", () => {
+    it("waits for an unreadable part and keeps event order", () => {
       const issues = [
         issue(11, 10, 1, arc(1)),
         issue(12, 10, 2, { ...arc(2), readableFrom: "2026-10-30" }),
@@ -179,6 +179,49 @@ describe("buildPlan", () => {
       expect(days(plan)).toEqual([
         ["2026-10-29", [11]],
         ["2026-10-30", [12, 13]],
+      ]);
+    });
+  });
+
+  describe("started events", () => {
+    const ev = (pos: number) => ({ event: { id: 7, position: pos } });
+    const days = (plan: ReturnType<typeof buildPlan>) => plan.map((e) => [e.date, e.entries.map((x) => x.issueId)]);
+    const oldPile = [1, 2, 3, 4, 5, 6].map((n) => issue(n, 30, n, { oldPile: true, storeDate: "2020-01-01" }));
+
+    it("keep the rest of the event at the front, before the old pile", () => {
+      // Parts 1 to 3 were read yesterday; 4 to 6 come from three series.
+      const issues = [...oldPile, issue(14, 10, 4, ev(4)), issue(15, 20, 9, ev(5)), issue(16, 10, 5, ev(6))];
+      const plan = buildPlan({ issues, pins: [], today: TODAY, maxPerEvening: 3, startedEvents: [7] });
+      expect(days(plan).slice(0, 2)).toEqual([
+        ["2026-10-29", [14, 15, 16]],
+        ["2026-10-30", [1, 2, 3]],
+      ]);
+    });
+
+    it("pause at a part that is not readable yet and pick up first thing when it is", () => {
+      const issues = [
+        ...oldPile,
+        issue(14, 10, 4, ev(4)),
+        issue(15, 20, 9, { ...ev(5), readableFrom: "2026-10-31" }),
+        issue(16, 10, 5, ev(6)),
+        issue(21, 20, 10),
+      ];
+      const plan = buildPlan({ issues, pins: [], today: TODAY, maxPerEvening: 3, startedEvents: [7] });
+      expect(days(plan).slice(0, 3)).toEqual([
+        ["2026-10-29", [14, 1, 2]],
+        ["2026-10-30", [3, 4, 5]],
+        ["2026-10-31", [15, 16, 6]],
+      ]);
+      // Series 20 goes on after its waiting event issue, never before it.
+      expect(plan.findIndex((e) => e.entries.some((x) => x.issueId === 21))).toBeGreaterThan(2);
+    });
+
+    it("read an event issue before earlier open issues of its series", () => {
+      const issues = [issue(28, 10, 128), issue(29, 10, 129), issue(33, 10, 133, ev(3)), issue(41, 20, 1, ev(4))];
+      const plan = buildPlan({ issues, pins: [], today: TODAY, maxPerEvening: 3, startedEvents: [7] });
+      expect(days(plan)).toEqual([
+        ["2026-10-29", [33, 41, 28]],
+        ["2026-10-30", [29]],
       ]);
     });
   });

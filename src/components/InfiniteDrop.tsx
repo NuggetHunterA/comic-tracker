@@ -4,6 +4,8 @@ import { addDays, shortDate } from "../lib/dates";
 import { issueTitle } from "../lib/labels";
 import { tapeOn } from "../lib/rip";
 import { Cover } from "./Cover";
+import { useConnect } from "../lib/connect";
+import { infiniteHref } from "../lib/infiniteLink";
 
 const SEEN_KEY = "infinite-drop-seen";
 /** At most this many come out of the box; the list underneath names them all. */
@@ -26,8 +28,8 @@ const markSeen = (day: string) => {
 
 /**
  * First open of the day: a comic box lands on the plan, the lid flies off and
- * today's new issues on DC Universe Infinite (pile and wishlist) are pulled
- * out and taped to the wall. A tap skips to the end.
+ * today's new issues on DC Universe Infinite (pile and wishlist, and a new
+ * DC Connect) are pulled out and taped to the wall. A tap skips to the end.
  */
 export function InfiniteDrop() {
   const { data, items, today } = useStore();
@@ -45,20 +47,27 @@ export function InfiniteDrop() {
       .sort((a, b) => Number(a.ui.status === "wishlist") - Number(b.ui.status === "wishlist") || issueTitle(a.issue, a.series).localeCompare(issueTitle(b.issue, b.series)));
   }, [data, items, today]);
 
+  // A new DC Connect comes out of the box on the day it showed up on Infinite.
+  const { connect } = useConnect(today);
+  const newConnect = connect && connect.seenOn === today && !connect.latest.read_on
+    ? { number: connect.latest.number, cover_url: connect.latest.cover_url, href: infiniteHref(connect.latest.url) }
+    : undefined;
+  const any = fresh.length > 0 || !!newConnect;
+
   useEffect(() => {
-    if (fresh.length > 0 && seenOn() !== today) {
+    if (any && seenOn() !== today) {
       markSeen(today);
       setOpen(true);
     }
-  }, [fresh.length, today]);
+  }, [any, today]);
 
-  if (!open || fresh.length === 0) return null;
-  return <Drop list={fresh} today={today} onClose={() => setOpen(false)} />;
+  if (!open || !any) return null;
+  return <Drop list={fresh} connect={newConnect} today={today} onClose={() => setOpen(false)} />;
 }
 
 type Fresh = ReturnType<typeof useStore>["items"][number];
 
-export function Drop({ list, connect, today, onClose }: {
+function Drop({ list, connect, today, onClose }: {
   list: Fresh[];
   /** Today's DC Connect, pulled out last with its link into Infinite. */
   connect?: { number: number; cover_url: string | null; href: string };

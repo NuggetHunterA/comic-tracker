@@ -6,6 +6,11 @@ import type { Issue, Series } from "./types";
 const android = typeof navigator !== "undefined" && /android/i.test(navigator.userAgent);
 const found = new Map<number, string | null>();
 
+/** A known Infinite page as the link to tap: on Android straight into the app. */
+export function infiniteHref(url: string): string {
+  return openHref(url, android);
+}
+
 /** Forgets looked-up issue pages, e.g. after the series link changed. */
 export function forgetInfiniteLinks() {
   found.clear();

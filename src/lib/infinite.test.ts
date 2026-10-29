@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bookSlug, normalizeSeriesUrl, openHref, pickBook, pickSeries, searchUrl, slugify } from "../../supabase/functions/_shared/infinite";
+import { bookSlug, connectBooks, normalizeSeriesUrl, ogImage, onSaleDate, openHref, pickBook, pickSeries, searchUrl, slugify } from "../../supabase/functions/_shared/infinite";
 
 // Excerpt in the shape of Infinite's series page for Batman (2011-2016).
 const seriesPage = `
@@ -63,5 +63,28 @@ describe("links", () => {
     expect(openHref(u, true)).toBe(
       `intent://www.dcuniverseinfinite.com/comics/book/batman-2011-52/bae9d698-f6cf-43b0-98ae-7b5ce5acfd34#Intent;scheme=https;package=com.wb.goog.dcuniverse;S.browser_fallback_url=${encodeURIComponent(u)};end`,
     );
+  });
+});
+
+describe("DC Connect", () => {
+  const page = `
+<a href="/comics/book/dc-connect-2021-77/340d6da1-3318-4fb7-9b03-a312d25552d4/c">#77</a>
+<a href="/comics/book/dc-connect-2021-76/9973ad77-9398-4b50-879a-4948704c3415/c">#76</a>
+<a href="/comics/book/dc-connect-2021-77/340d6da1-3318-4fb7-9b03-a312d25552d4">#77</a>
+<a href="/comics/book/dc-connect-2020-58/2288753e-f74c-4e8f-a746-f8a0c02ffd07/c">#58</a>`;
+  it("lists the catalogs newest first, whatever year the slug carries", () => {
+    expect(connectBooks(page)).toEqual([
+      { number: 77, url: "https://www.dcuniverseinfinite.com/comics/book/dc-connect-2021-77/340d6da1-3318-4fb7-9b03-a312d25552d4" },
+      { number: 76, url: "https://www.dcuniverseinfinite.com/comics/book/dc-connect-2021-76/9973ad77-9398-4b50-879a-4948704c3415" },
+      { number: 58, url: "https://www.dcuniverseinfinite.com/comics/book/dc-connect-2020-58/2288753e-f74c-4e8f-a746-f8a0c02ffd07" },
+    ]);
+  });
+  it("reads the on-sale date from a dc.com issue page", () => {
+    expect(onSaleDate(`<p>News: October 1st, 2026</p><dt>On Sale Date</dt><dd>Wednesday, November 4th, 2026</dd>`)).toBe("2026-11-04");
+    expect(onSaleDate(`<p>Posted October 1st, 2026</p>`)).toBeNull();
+  });
+  it("takes the cover from the share image", () => {
+    expect(ogImage(`<meta property="og:image" content="https://img.example/c.jpg?w=1&amp;h=2">`)).toBe("https://img.example/c.jpg?w=1&h=2");
+    expect(ogImage(`<meta content="https://img.example/d.jpg" property="og:image" />`)).toBe("https://img.example/d.jpg");
   });
 });

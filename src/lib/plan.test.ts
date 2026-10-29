@@ -22,9 +22,9 @@ describe("readableFrom", () => {
   it("adds the Infinite delay to the store date", () => {
     expect(readableFrom("2026-11-26", "infinite", null, 30)).toBe("2026-12-26");
   });
-  it("needs a purchase for print and digital", () => {
+  it("needs a purchase for print", () => {
     expect(readableFrom("2026-11-26", "print", null, 30)).toBeNull();
-    expect(readableFrom("2026-11-26", "digital", "2026-11-28", 30)).toBe("2026-11-28");
+    expect(readableFrom("2026-11-26", "print", "2026-11-28", 30)).toBe("2026-11-28");
   });
   it("has no date without a store date or format", () => {
     expect(readableFrom(null, "infinite", null, 30)).toBeNull();

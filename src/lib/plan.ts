@@ -42,7 +42,7 @@ export function readableFrom(
   infiniteDelayDays: number,
 ): string | null {
   if (format === "infinite") return storeDate ? addDays(storeDate, infiniteDelayDays) : null;
-  if (format === "print" || format === "digital") return boughtOn;
+  if (format === "print") return boughtOn;
   return null;
 }
 

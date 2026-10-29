@@ -33,6 +33,11 @@ export interface EventView {
   read: number;
 }
 
+/** Every issue read. A fresh, empty event is not done. */
+export function eventDone(v: EventView): boolean {
+  return v.order.length > 0 && v.read === v.order.length;
+}
+
 /** Where an issue sits in its event, for the markers. */
 export interface EventMark {
   event: EventRow;

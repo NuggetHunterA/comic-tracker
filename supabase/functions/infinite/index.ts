@@ -37,6 +37,23 @@ async function findSeries(name: string, yearBegan: number | null): Promise<strin
   return pickSeries(await attempt(`/search?q=${encodeURIComponent(name)}&group=comics`), name, yearBegan);
 }
 
+/**
+ * The series page shows 20 issues per ?page=N, newest first, and page N repeats pages 1 to N-1.
+ * So ask for ever longer lists until the issue turns up or no new issues come.
+ */
+async function bookOnSeriesPage(seriesUrl: string, name: string, yearBegan: number | null, number: string): Promise<string | null> {
+  let seen = 0;
+  for (const n of [1, 3, 8, 20]) {
+    const html = await attempt(`${seriesUrl}?page=${n}`);
+    const hit = pickBook(html, name, yearBegan, number);
+    if (hit) return hit;
+    const count = new Set(html.match(/\/comics\/book\/[a-z0-9-]+\/[0-9a-f-]{36}/g) ?? []).size;
+    if (count <= seen || count < n * 20) return null;
+    seen = count;
+  }
+  return null;
+}
+
 async function issueLink(issueId: number): Promise<string | null> {
   const { data: issue, error } = await db.from("issues").select("id, number, series_id, infinite_url").eq("id", issueId).maybeSingle();
   if (error) throw error;
@@ -52,7 +69,7 @@ async function issueLink(issueId: number): Promise<string | null> {
     if (seriesUrl) await db.from("series").update({ infinite_url: seriesUrl }).eq("id", s.id);
   }
   // The series page lists the newest issues; the issue search covers older ones.
-  let url = seriesUrl ? pickBook(await attempt(seriesUrl), s.name, s.year_began, issue.number) : null;
+  let url = seriesUrl ? await bookOnSeriesPage(seriesUrl, s.name, s.year_began, issue.number) : null;
   url ??= pickBook(await attempt(`/search?q=${encodeURIComponent(`${s.name} ${issue.number}`)}&group=comics`), s.name, s.year_began, issue.number);
   if (url) await db.from("issues").update({ infinite_url: url }).eq("id", issue.id);
   return url;

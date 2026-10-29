@@ -66,11 +66,12 @@ export function searchUrl(name: string, number: string): string {
 }
 
 /**
- * On Android, an intent link hands the URL straight to the Infinite app instead of letting
- * the browser decide; without the app (or a matching screen in it) it opens the web page.
+ * On Android, an intent link hands an issue page straight to the Infinite app instead of letting
+ * the browser decide; without the app it opens the web page. Searches stay in the browser,
+ * because the app crashes on search links.
  */
 export function openHref(url: string, android: boolean): string {
-  if (!android || !url.startsWith(INFINITE_ORIGIN)) return url;
+  if (!android || !url.startsWith(`${INFINITE_ORIGIN}/comics/book/`)) return url;
   const rest = url.slice("https://".length);
   return `intent://${rest}#Intent;scheme=https;package=${INFINITE_PACKAGE};S.browser_fallback_url=${encodeURIComponent(url)};end`;
 }

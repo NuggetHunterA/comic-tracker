@@ -265,11 +265,12 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-weight: 700;
 .tally .bump { display: inline-block; animation: bump 260ms cubic-bezier(0.16, 1, 0.3, 1); }
 @keyframes bump { from { transform: translateY(-5px); color: var(--pink); } to { transform: none; } }
 
-/* The detail sheet comes up fresh from the copier: one pass of the scan light. */
 @media (prefers-reduced-motion: no-preference) {
   .sheet { animation: rise 180ms ease-out; }
 }
-.sheet::after {
+/* An issue's detail comes up fresh from the copier: one pass of the scan light (folded sheet only). */
+.issue-detail { position: relative; }
+.sheet .issue-detail::after {
   content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none;
   background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.9) 40%, var(--pink) 72%, transparent) no-repeat;
   background-size: 100% 14px; background-position: 0 -20px;

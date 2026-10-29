@@ -1,6 +1,6 @@
 // Metron sync for the comic tracker.
 // POST {action: "cron"} with x-cron-secret: scheduled sync of followed series and the catalog.
-// POST {action: "search-series", q} or {action: "sync-series", series_id} with a user JWT.
+// POST {action: "search-series", q}, {action: "sync-series", series_id} or {action: "issue-writer", issue_id} with a user JWT.
 import { createClient } from "npm:@supabase/supabase-js@2.58.0";
 
 const METRON = "https://metron.cloud/api";
@@ -8,6 +8,7 @@ const MIN_GAP_MS = 3200; // Metron allows 20 requests per minute.
 const RUN_BUDGET_MS = 110_000;
 const CATALOG_MAX_AGE_H = 20;
 const SERIES_MAX_AGE_D = 7;
+const WRITERS_PER_RUN = 15;
 const PUBLISHERS: Record<string, string> = { DC: "DC Comics", Marvel: "Marvel", Image: "Image" };
 
 const cors = {
@@ -161,6 +162,41 @@ async function syncFollowedSeries(log: string[]) {
   }
 }
 
+// The first credited writer; script, story or plot only when nobody is credited as writer.
+function firstWriter(credits: any[] | undefined): string | null {
+  for (const role of ["Writer", "Script", "Story", "Plot"]) {
+    const c = (credits ?? []).find((c) => (c.role ?? []).some((r: any) => r.name === role));
+    if (c?.creator) return c.creator;
+  }
+  return null;
+}
+
+async function syncWriter(issueId: number): Promise<string | null> {
+  const it = await metron(`issue/${issueId}/`);
+  const writer = firstWriter(it.credits);
+  const { error } = await db.from("issues").update({ writer, writer_synced_at: new Date().toISOString() }).eq("id", issueId);
+  if (error) throw error;
+  return writer;
+}
+
+// A few pile issues per run, so most details already know their writer.
+async function syncPileWriters(log: string[]) {
+  const { data: open } = await db.from("user_issues").select("issue_id").in("status", ["pile", "expected"]);
+  const ids = [...new Set((open ?? []).map((u) => u.issue_id))];
+  if (!ids.length) return;
+  const todo: number[] = [];
+  for (let i = 0; i < ids.length && todo.length < WRITERS_PER_RUN; i += 150) {
+    const { data } = await db.from("issues").select("id").in("id", ids.slice(i, i + 150)).is("writer_synced_at", null);
+    todo.push(...(data ?? []).map((r) => r.id));
+  }
+  let n = 0;
+  for (const id of todo.slice(0, WRITERS_PER_RUN)) {
+    await syncWriter(id);
+    n++;
+  }
+  if (n) log.push(`writers: ${n}`);
+}
+
 async function cron(): Promise<string> {
   deadline = Date.now() + RUN_BUDGET_MS;
   const log: string[] = [];
@@ -171,6 +207,7 @@ async function cron(): Promise<string> {
     await db.rpc("materialize_followed");
     await syncCatalog(log);
     await db.rpc("materialize_followed");
+    await syncPileWriters(log);
   } catch (e) {
     if (e instanceof OutOfTime) log.push("budget used, continuing next run");
     else if (e instanceof RateLimited) log.push(`rate limited (retry-after ${e.message})`);
@@ -223,6 +260,7 @@ Deno.serve(async (req) => {
     deadline = Date.now() + RUN_BUDGET_MS;
 
     if (body.action === "search-series") return json({ results: await searchSeries(String(body.q ?? "")) });
+    if (body.action === "issue-writer") return json({ writer: await syncWriter(Number(body.issue_id)) });
     if (body.action === "sync-series") return json({ issues: await syncSeries(Number(body.series_id)) });
     return json({ error: "unknown action" }, 400);
   } catch (e) {

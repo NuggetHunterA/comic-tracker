@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { supabase } from "../lib/supabase";
+import { metron, supabase } from "../lib/supabase";
 import { actions, useStore, eventDone } from "../lib/store";
 import { addDays, dateLabel, dayLabel, shortDate } from "../lib/dates";
 import { FORMAT_LABEL, issueTitle } from "../lib/labels";
@@ -159,6 +159,7 @@ function IssueDetailBody({ issueId, onClose, fromRun }: Props) {
             {issue.store_date && (
               <div className="kv"><span>ERSCHEINT</span><span>{dateLabel(issue.store_date, today)}</span></div>
             )}
+            <WriterLine issueId={issueId} />
             {isDC && issue.store_date && (!ui || ui.format === "infinite") && (
               <div className="kv"><span>INFINITE</span>{addDays(issue.store_date, delay) <= today ? <span>Verfügbar</span> : <span><span className="stk">AB {shortDate(addDays(issue.store_date, delay))}</span></span>}</div>
             )}
@@ -255,6 +256,30 @@ function PlanLine({ issueId, plan, today }: { issueId: number; plan: { date: str
     );
   }
   return null;
+}
+
+// Writers already looked up, so reopening a detail does not ask again.
+const writers = new Map<number, string | null>();
+
+/** The issue's writer, one name only; asks Metron the first time the issue is opened. */
+function WriterLine({ issueId }: { issueId: number }) {
+  const [writer, setWriter] = useState(() => writers.get(issueId) ?? null);
+  useEffect(() => {
+    if (writers.has(issueId)) return;
+    let stale = false;
+    (async () => {
+      const { data } = await supabase.from("issues").select("writer, writer_synced_at").eq("id", issueId).maybeSingle();
+      let name: string | null = data?.writer ?? null;
+      if (data && !data.writer_synced_at) name = (await metron<{ writer: string | null }>({ action: "issue-writer", issue_id: issueId })).writer;
+      writers.set(issueId, name);
+      if (!stale) setWriter(name);
+    })().catch(() => {
+      // No writer shown is fine; the cron fills it in later.
+    });
+    return () => { stale = true; };
+  }, [issueId]);
+  if (!writer) return null;
+  return <div className="kv"><span>AUTOR</span><span>{writer}</span></div>;
 }
 
 function EventLine({ issueId }: { issueId: number }) {

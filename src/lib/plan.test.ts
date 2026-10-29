@@ -100,15 +100,13 @@ describe("buildPlan", () => {
       today: TODAY,
       maxPerEvening: 3,
     });
-    expect(plan[0]).toEqual({
-      date: TODAY,
-      entries: [
-        { issueId: 4, pinned: true },
-        { issueId: 2, pinned: false },
-        { issueId: 3, pinned: false },
-      ],
-    });
-    expect(plan[1].entries).toEqual([{ issueId: 1, pinned: true }]);
+    // #2 and #3 wait for the pinned #1 tomorrow.
+    expect(plan[0]).toEqual({ date: TODAY, entries: [{ issueId: 4, pinned: true }] });
+    expect(plan[1].entries).toEqual([
+      { issueId: 1, pinned: true },
+      { issueId: 2, pinned: false },
+      { issueId: 3, pinned: false },
+    ]);
   });
 
   it("waits for Infinite dates without skipping ahead in a series", () => {
@@ -182,5 +180,21 @@ describe("buildPlan", () => {
         ["2026-10-30", [12, 13]],
       ]);
     });
+  });
+
+  it("does not read later issues of a series before a pinned earlier one", () => {
+    const issues = [
+      issue(13, 10, 113),
+      issue(14, 10, 114),
+      issue(15, 10, 115),
+      issue(16, 10, 116),
+      issue(21, 20, 1, { storeDate: "2025-01-01" }),
+    ];
+    const plan = buildPlan({ issues, pins: [{ issueId: 13, evening: "2026-10-30", slot: 1 }], today: TODAY, maxPerEvening: 3 });
+    expect(plan.map((e) => [e.date, e.entries.map((x) => x.issueId)])).toEqual([
+      ["2026-10-29", [21]],
+      ["2026-10-30", [13, 14, 15]],
+      ["2026-10-31", [16]],
+    ]);
   });
 });

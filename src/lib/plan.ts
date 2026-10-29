@@ -7,6 +7,7 @@
 //   order (crossovers included); the plan switches series only after an arc.
 // - Without arc data a series is read in blocks of BLOCK_SIZE issues.
 // - Pinned entries stay where the reader put them; past pins move to today.
+//   Later issues of a pinned issue's series are not read before its evening.
 // - The later parts of a pinned issue's arc follow it: same evening if there
 //   is room, otherwise first thing on the next evenings.
 import { addDays } from "./dates";
@@ -142,6 +143,7 @@ export function buildPlan(opts: {
     opts.blockSize,
   );
   const lastPinDay = [...pinsByDay.keys()].sort().pop() ?? today;
+  const notBefore = notBeforePins(opts.issues, opts.pins, pinned, today);
 
   const evenings: Evening[] = [];
   for (let d = 0; d <= HORIZON_DAYS; d++) {
@@ -157,6 +159,11 @@ export function buildPlan(opts: {
     for (const f of followers) {
       if (placed.size >= capacity) break;
       if (f.from > date || blockedFollowArcs.has(f.arcId)) continue;
+      if ((notBefore.get(f.issue.id) ?? "") > date) {
+        blockedFollowArcs.add(f.arcId);
+        blockedSeries.add(f.issue.seriesId);
+        continue;
+      }
       if (f.issue.readableFrom !== null && f.issue.readableFrom <= date) {
         placed.add(f.issue.id);
         entries.push({ issueId: f.issue.id, pinned: false });
@@ -167,7 +174,10 @@ export function buildPlan(opts: {
     }
     for (const i of queue) {
       if (placed.size >= capacity) break;
-      const blocked = blockedSeries.has(i.seriesId) || i.arcs.some((a) => blockedArcs.has(a.arcId));
+      const blocked =
+        blockedSeries.has(i.seriesId) ||
+        i.arcs.some((a) => blockedArcs.has(a.arcId)) ||
+        (notBefore.get(i.id) ?? "") > date;
       if (!blocked && i.readableFrom !== null && i.readableFrom <= date) {
         placed.add(i.id);
         entries.push({ issueId: i.id, pinned: false });
@@ -209,6 +219,22 @@ function arcFollowers(issues: PlanIssue[], pins: Pin[], pinned: Set<number>, tod
         taken.add(i.id);
         out.push({ issue: i, arcId: a.arcId, from: p.evening });
       }
+    }
+  }
+  return out;
+}
+
+/** For unpinned issues: the latest evening an earlier issue of the same series is pinned to. */
+function notBeforePins(issues: PlanIssue[], pins: Pin[], pinned: Set<number>, today: string) {
+  const byId = new Map(issues.map((i) => [i.id, i]));
+  const out = new Map<number, string>();
+  for (const p of pins) {
+    const head = byId.get(p.issueId);
+    if (!head) continue;
+    const evening = p.evening < today ? today : p.evening;
+    for (const i of issues) {
+      if (pinned.has(i.id) || i.seriesId !== head.seriesId || byNumber(head, i) >= 0) continue;
+      if (evening > (out.get(i.id) ?? "")) out.set(i.id, evening);
     }
   }
   return out;

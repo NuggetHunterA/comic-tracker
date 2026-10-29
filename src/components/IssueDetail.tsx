@@ -52,7 +52,7 @@ function IssueDetailBody({ issueId, onClose }: Props) {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
+    <div className="issue-detail" style={{ display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
       <div ref={head} style={{ display: "flex", gap: 22, alignItems: "flex-start" }}>
         <Cover issue={issue} readable={!ui || readable || ui.status === "read"} showNumber={false} tape={ui?.status === "read" ? "GELESEN" : true} style={{ width: 126, flex: "none", transform: "rotate(-1.5deg)" }}>
           {ui?.status === "read" && ui.rating && <span key={ui.rating} className={`stamp grade ${stamped === ui.rating ? "hit" : ""}`}>{ui.rating}<b>/10</b></span>}

@@ -183,6 +183,20 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-weight: 700;
 .tonight .tape { transform: rotate(4deg); }
 .tonight > :nth-child(2) .tape { transform: rotate(-5deg); }
 
+/* Ripping a read cover off the wall (lib/rip.ts). The halves fly above
+   everything, the scrap stays on the wall under the covers. */
+.tonight > * { position: relative; z-index: 1; }
+.tonight .cv { transition: transform 380ms cubic-bezier(0.16, 1, 0.3, 1); }
+.rip { position: absolute; z-index: 40; pointer-events: none; }
+.rip.rip-wall { z-index: 0; }
+.rip-half, .rip-layer { position: absolute; inset: 0; }
+.rip-face { border: 1px solid var(--ink); background-size: cover; background-position: center; }
+.rip-fibre { background: #fbfaf4; }
+.rip-face .num { position: absolute; left: 6px; bottom: 6px; background: var(--ink); color: var(--paper); font-family: var(--display); font-size: 20px; line-height: 1.2; padding: 0 4px; }
+.tally { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 14px; }
+.tally .bump { display: inline-block; animation: bump 260ms cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes bump { from { transform: translateY(-5px); color: var(--pink); } to { transform: none; } }
+
 @media (prefers-reduced-motion: no-preference) {
   .sheet { animation: rise 180ms ease-out; }
   @keyframes rise { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }

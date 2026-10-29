@@ -1,9 +1,12 @@
-import { useMemo } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import { actions, useStore } from "../lib/store";
 import { dayLabel, shortDate } from "../lib/dates";
 import { issueTitle, runsLabel } from "../lib/labels";
 import { Cover } from "../components/Cover";
 import { useRun } from "../components/useRun";
+import { RIP_RELEASE_MS, ripCover, tapeOn } from "../lib/rip";
+
+const wait = (ms: number) => new Promise((done) => window.setTimeout(done, ms));
 
 export function PlanScreen({ selected, onSelect }: { selected: number | null; onSelect: (id: number) => void }) {
   const { data, plan, today, items } = useStore();
@@ -18,32 +21,47 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
       .filter((i) => (i.ui.status === "pile" || i.ui.status === "expected") && i.ui.format === "infinite" && i.readableFrom && i.readableFrom > today)
       .sort((a, b) => a.readableFrom!.localeCompare(b.readableFrom!))[0];
     const pileCount = items.filter((i) => (i.ui.status === "pile" || i.ui.status === "expected") && i.readable).length;
-    return { tonight, next, soon, pileCount };
+    const readToday = items.filter((i) => i.ui.status === "read" && i.ui.read_on === today).length;
+    return { tonight, next, soon, pileCount, readToday };
   }, [data, plan, today, items]);
 
+  const wall = useRef<HTMLElement>(null);
+  useSlideOver(wall);
+
   if (!view) return null;
-  const { tonight, next, soon, pileCount } = view;
+  const { tonight, next, soon, pileCount, readToday } = view;
+
+  // The cover tears off right away; the plan reshuffles once the halves are falling clear.
+  const markRead = async (issueId: number, card: HTMLElement | null) => {
+    const cv = card?.querySelector<HTMLElement>(".cv");
+    const rip = cv ? ripCover(cv) : null;
+    const ok = await run(() => Promise.all([actions.markRead(issueId, today), wait(RIP_RELEASE_MS)]));
+    if (!ok) rip?.restore();
+  };
 
   return (
     <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span className="stk" style={{ transform: "rotate(-1deg)", fontSize: 14, padding: "3px 8px" }}>{dayLabel(today)}</span>
-        <span className="d" style={{ fontSize: 14 }}>STAPEL: {pileCount}</span>
+        <span className="d tally">
+          <span>STAPEL: {pileCount}</span>
+          {readToday > 0 && <span>HEUTE GELESEN: <span key={readToday} className="bump">{readToday}</span></span>}
+        </span>
       </div>
       <h1 style={{ fontSize: "clamp(48px, 15vw, 60px)", lineHeight: 0.92 }}>Heute<br />Abend</h1>
       {tonight.length > 0 ? (
         <>
           <span style={{ fontSize: 16 }}>Am Stück: <strong>{runsLabel(tonight)}</strong></span>
-          <section aria-label="Heute Abend lesen" className="tonight">
+          <section aria-label="Heute Abend lesen" className="tonight" ref={wall}>
             {tonight.map(({ issue, series }) => (
-              <div key={issue.id}>
+              <div key={issue.id} data-id={issue.id}>
                 <button type="button" onClick={() => onSelect(issue.id)} aria-label={`${issueTitle(issue, series)} öffnen`}
                   style={{ padding: 0, border: "none", background: "none", cursor: "pointer" }}>
                   <Cover issue={issue} tape big className={selected === issue.id ? "selected" : ""}
                     style={selected === issue.id ? { outline: "3px solid var(--pink)", outlineOffset: 3 } : undefined} />
                 </button>
                 <button type="button" className="btn" disabled={busy} aria-label={`${issueTitle(issue, series)} als gelesen markieren`}
-                  onClick={() => run(() => actions.markRead(issue.id, today))}>Gelesen</button>
+                  onClick={(e) => markRead(issue.id, e.currentTarget.parentElement)}>Gelesen</button>
               </div>
             ))}
           </section>
@@ -84,4 +102,26 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
       )}
     </>
   );
+}
+
+/** Slides the remaining covers over (FLIP) and tapes newly planned ones on. */
+function useSlideOver(ref: React.RefObject<HTMLElement>) {
+  const last = useRef(new Map<string, { x: number; y: number }>());
+  useLayoutEffect(() => {
+    const prev = last.current;
+    const now = new Map<string, { x: number; y: number }>();
+    for (const el of Array.from(ref.current?.children ?? []) as HTMLElement[]) {
+      const id = el.dataset.id!;
+      const pos = { x: el.offsetLeft, y: el.offsetTop };
+      now.set(id, pos);
+      const was = prev.get(id);
+      if (was && (was.x !== pos.x || was.y !== pos.y)) {
+        el.animate([{ transform: `translate(${was.x - pos.x}px, ${was.y - pos.y}px)` }, { transform: "none" }], { duration: 420, easing: "cubic-bezier(0.16, 1, 0.3, 1)" });
+      } else if (!was && prev.size > 0) {
+        const cv = el.querySelector<HTMLElement>(".cv");
+        if (cv) tapeOn(cv, 120);
+      }
+    }
+    last.current = now;
+  });
 }

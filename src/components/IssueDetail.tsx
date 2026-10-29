@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { actions, useStore } from "../lib/store";
 import { addDays, dateLabel, dayLabel, shortDate } from "../lib/dates";
 import { FORMAT_LABEL, issueTitle } from "../lib/labels";
@@ -7,6 +7,7 @@ import type { Format } from "../lib/types";
 import { Cover } from "./Cover";
 import { FormatChips } from "./FormatChips";
 import { useRun } from "./useRun";
+import { RIP_MS, ripCover } from "../lib/rip";
 
 const INFINITE_URL = "https://www.dcuniverseinfinite.com/";
 
@@ -14,6 +15,7 @@ export function IssueDetail({ issueId, onClose }: { issueId: number; onClose?: (
   const { data, today, plan } = useStore();
   const { run, busy, error } = useRun();
   const [pickFormat, setPickFormat] = useState<Format>("infinite");
+  const head = useRef<HTMLDivElement>(null);
   if (!data) return null;
   const issue = data.issues.get(issueId);
   if (!issue) return <p className="mut">Heft nicht gefunden.</p>;
@@ -28,8 +30,8 @@ export function IssueDetail({ issueId, onClose }: { issueId: number; onClose?: (
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
-      <div style={{ display: "flex", gap: 22, alignItems: "flex-start" }}>
-        <Cover issue={issue} readable={!ui || readable || ui.status === "read"} showNumber={false} tape style={{ width: 126, flex: "none", transform: "rotate(-1.5deg)" }} />
+      <div ref={head} style={{ display: "flex", gap: 22, alignItems: "flex-start" }}>
+        <Cover issue={issue} readable={!ui || readable || ui.status === "read"} showNumber={false} tape={ui?.status === "read" ? "GELESEN" : true} style={{ width: 126, flex: "none", transform: "rotate(-1.5deg)" }} />
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
           <h2 style={{ fontSize: 30, lineHeight: 1 }}>{title}</h2>
           <div style={{ display: "flex", flexDirection: "column", marginTop: 6 }}>
@@ -88,7 +90,13 @@ export function IssueDetail({ issueId, onClose }: { issueId: number; onClose?: (
           <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.markUnread(issueId))}>Doch nicht gelesen</button>
         ) : (
           <>
-            {readable && <button type="button" className="btn solid" style={{ flex: 1 }} disabled={busy} onClick={() => run(() => actions.markRead(issueId, today))}>Gelesen</button>}
+            {readable && <button type="button" className="btn solid" style={{ flex: 1 }} disabled={busy} onClick={async () => {
+              // Tear the cover off, then tape it back on marked as read.
+              const cv = head.current?.querySelector<HTMLElement>(".cv");
+              const rip = cv ? ripCover(cv) : null;
+              await run(() => Promise.all([actions.markRead(issueId, today), new Promise((done) => window.setTimeout(done, RIP_MS))]));
+              rip?.restore();
+            }}>Gelesen</button>}
             {ui.format !== "infinite" && !ui.bought_on && (
               <button type="button" className="btn solid" style={{ flex: 1 }} disabled={busy} onClick={() => run(() => actions.setBought(issueId, today))}>Gekauft</button>
             )}

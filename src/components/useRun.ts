@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { useStore } from "../lib/store";
 
-/** Runs a write, then reloads. Keeps the last error for display. */
+/** Runs a write, then reloads. Keeps the last error for display; resolves to whether it worked. */
 export function useRun() {
   const { reload } = useStore();
   const [busy, setBusy] = useState(false);
@@ -13,8 +13,10 @@ export function useRun() {
       try {
         await fn();
         await reload();
+        return true;
       } catch (e) {
         setError((e as { message?: string })?.message ?? String(e));
+        return false;
       } finally {
         setBusy(false);
       }

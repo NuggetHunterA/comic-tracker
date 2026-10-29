@@ -1,5 +1,5 @@
 // Offline shell: network first for pages, cache first for built assets and fonts.
-const CACHE = "comic-stapel-v1";
+const CACHE = "comic-stapel-v2";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => {

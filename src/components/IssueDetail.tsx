@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
+import { supabase } from "../lib/supabase";
 import { actions, useStore } from "../lib/store";
 import { addDays, dateLabel, dayLabel, shortDate } from "../lib/dates";
 import { FORMAT_LABEL, issueTitle } from "../lib/labels";
 import { readableFrom } from "../lib/plan";
-import type { Format } from "../lib/types";
+import type { Format, Issue } from "../lib/types";
 import { Cover } from "./Cover";
 import { FormatChips } from "./FormatChips";
 import { useRun } from "./useRun";
@@ -65,8 +66,11 @@ export function IssueDetail({ issueId, onClose }: { issueId: number; onClose?: (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <span style={{ fontWeight: 700, fontSize: 15 }}>Wie willst du es lesen?</span>
           <FormatChips value={pickFormat} onChange={setPickFormat} allowInfinite={isDC} />
-          {pickFormat === "infinite" && issue.store_date && (
+          {pickFormat === "infinite" && issue.store_date && addDays(issue.store_date, delay) > today && (
             <span className="mut" style={{ fontSize: 14 }}>Kommt in den Stapel und wird am <span className="stk">{shortDate(addDays(issue.store_date, delay))}</span> lesbar.</span>
+          )}
+          {pickFormat === "infinite" && issue.store_date && addDays(issue.store_date, delay) <= today && (
+            <span className="mut" style={{ fontSize: 14 }}>Kommt in den Stapel und ist sofort lesbar.</span>
           )}
           {pickFormat !== "infinite" && <span className="mut" style={{ fontSize: 14 }}>Kommt in den Stapel. Lesbar, sobald du es als gekauft markierst.</span>}
         </div>
@@ -75,17 +79,21 @@ export function IssueDetail({ issueId, onClose }: { issueId: number; onClose?: (
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: "auto" }}>
         {!ui || ui.status === "dismissed" ? (
           <>
-            {!followed && <button type="button" className="btn solid" disabled={busy} onClick={() => run(() => actions.follow(issue.series_id, isDC ? "infinite" : "print"))}>Serie folgen</button>}
-            <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.addIssue(issueId, "pile", isDC ? pickFormat : pickFormat === "infinite" ? "print" : pickFormat))}>Nur dieses Heft einplanen</button>
+            <button type="button" className="btn solid" style={{ flex: "1 1 100%" }} disabled={busy} onClick={() => run(() => actions.markReadEarlier(issueId))}>Schon gelesen</button>
+            <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.addIssue(issueId, "pile", isDC ? pickFormat : pickFormat === "infinite" ? "print" : pickFormat))}>Einplanen</button>
             <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.addIssue(issueId, "wishlist", null))}>Auf die Wunschliste</button>
+            {!followed && <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.follow(issue.series_id, isDC ? "infinite" : "print"))}>Serie folgen</button>}
           </>
         ) : ui.status === "wishlist" ? (
           <>
             <button type="button" className="btn solid" style={{ flex: 1 }} disabled={busy} onClick={() => run(() => actions.addIssue(issueId, "pile", pickFormat))}>Auf den Stapel</button>
+            <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.markReadEarlier(issueId))}>Schon gelesen</button>
             <button type="button" className="btn" disabled={busy} onClick={() => run(async () => { await actions.dismissIssue(issueId); onClose?.(); })}>Von der Liste</button>
           </>
         ) : ui.status === "read" ? (
-          <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.markUnread(issueId))}>Doch nicht gelesen</button>
+          // Read earlier (no format, no date) goes back to nothing, not onto the pile.
+          <button type="button" className="btn" disabled={busy}
+            onClick={() => run(() => (!ui.format && !ui.read_on ? actions.removeIssue(issueId) : actions.markUnread(issueId)))}>Doch nicht gelesen</button>
         ) : (
           <>
             {readable && <button type="button" className="btn solid" style={{ flex: 1 }} disabled={busy} onClick={() => run(() => actions.markRead(issueId, today))}>Gelesen</button>}
@@ -109,6 +117,10 @@ export function IssueDetail({ issueId, onClose }: { issueId: number; onClose?: (
           </>
         )}
       </div>
+
+      {issue.sort_number !== null && (!ui || ui.status === "wishlist" || ui.status === "dismissed" || ui.status === "read") && (
+        <ReadUpTo issue={issue} />
+      )}
 
       {ui && ui.status !== "read" && ui.status !== "dismissed" && (
         <details>
@@ -155,4 +167,66 @@ function ArcLine({ issueId }: { issueId: number }) {
   }, [data, issueId]);
   if (!line) return null;
   return <div className="kv"><span>ARC</span><span>{line.name} · Teil {line.part} von {line.total}</span></div>;
+}
+
+/** "Bis hier alles gelesen": marks earlier issues of the series as read, pile untouched. */
+function ReadUpTo({ issue }: { issue: Issue }) {
+  const { data } = useStore();
+  const { run, busy, error } = useRun();
+  const [open, setOpen] = useState(false);
+  const [todo, setTodo] = useState<{ ids: number[]; first: string } | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  async function prepare() {
+    setOpen(true);
+    setTodo(null);
+    setFailed(null);
+    try {
+      const rows: { id: number; number: string }[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data: d, error: e } = await supabase.from("issues").select("id, number").eq("series_id", issue.series_id)
+          .lte("sort_number", issue.sort_number!).order("sort_number").range(from, from + 999);
+        if (e) throw e;
+        rows.push(...(d ?? []));
+        if (!d || d.length < 1000) break;
+      }
+      const ids = rows.filter((r) => {
+        const st = data?.userIssues.get(r.id)?.status;
+        return st !== "pile" && st !== "expected" && st !== "read";
+      }).map((r) => r.id);
+      setTodo({ ids, first: rows[0]?.number ?? issue.number });
+    } catch (e) {
+      setFailed((e as { message?: string })?.message ?? String(e));
+    }
+  }
+
+  if (!open) {
+    return (
+      <button type="button" className="btn dashed" style={{ alignSelf: "flex-start" }} aria-expanded="false" onClick={prepare}>
+        Bis #{issue.number} alles gelesen
+      </button>
+    );
+  }
+  return (
+    <div className="confirm" role="group" aria-label={`Bis #${issue.number} alles gelesen`}>
+      {failed ? <p>{failed}</p> : !todo ? <p>Zähle die Hefte …</p> : todo.ids.length === 0 ? (
+        <p>Bis #{issue.number} ist schon alles gelesen oder liegt auf dem Stapel.</p>
+      ) : (
+        <p>
+          Trägt #{todo.first} bis #{issue.number} als gelesen ein, das {todo.ids.length === 1 ? "ist 1 Heft" : `sind ${todo.ids.length} Hefte`} ohne Lesedatum.
+          Hefte auf dem Stapel bleiben, wo sie sind.
+        </p>
+      )}
+      <div style={{ display: "flex", gap: 8 }}>
+        {todo && todo.ids.length > 0 && (
+          <button type="button" className="btn hot" style={{ flex: 1 }} disabled={busy}
+            onClick={() => run(async () => { await actions.markReadUpTo(todo.ids); setOpen(false); })}>
+            {busy ? "Trage ein …" : todo.ids.length === 1 ? "1 Heft eintragen" : `${todo.ids.length} Hefte eintragen`}
+          </button>
+        )}
+        <button type="button" className="btn ghost" disabled={busy} onClick={() => setOpen(false)}>{todo && todo.ids.length > 0 ? "Abbrechen" : "Schließen"}</button>
+      </div>
+      {error && <p role="alert" className="stk" style={{ whiteSpace: "normal" }}>{error}</p>}
+    </div>
+  );
 }

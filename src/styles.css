@@ -126,6 +126,62 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-weight: 700;
 .tile.sel .cv { outline: 3px solid var(--pink); outline-offset: 3px; }
 .empty { border: 2px dashed var(--ink); padding: 18px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
 
+/* ---------- Alle Hefte: the whole run of a series ---------- */
+.back {
+  align-self: flex-start; display: inline-flex; gap: 6px; align-items: center; min-height: 44px; padding: 0 8px 0 0;
+  border: none; background: none; font-weight: 700; font-size: 15px; cursor: pointer;
+}
+.allbtn { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.allbtn .d { font-weight: 400; font-size: 14px; }
+.btn.dashed { border-style: dashed; }
+.grphead {
+  display: inline-flex; gap: 6px; align-items: center; min-height: 32px; padding: 0; border: none; background: none;
+  font-weight: 700; font-size: 18px; text-align: left; cursor: pointer;
+}
+.chip .cnt { font-weight: 400; font-size: 12px; margin-left: 4px; }
+/* Filters and jump stay put while the run scrolls; offsets clear the sheet's close bar. */
+.runhead {
+  position: sticky; top: 40px; z-index: 3; display: flex; flex-direction: column; gap: 8px;
+  margin: 0 -20px; padding: 6px 20px 10px; background: var(--paper); border-bottom: 2px solid var(--ink);
+}
+.runtitle { display: flex; flex-direction: column; gap: 4px; }
+.jump { display: flex; gap: 8px; }
+.jump input { width: 140px; flex: none; }
+.run { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px 8px; }
+.band {
+  grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  border-top: 2px solid var(--ink); padding-top: 4px; margin-top: 6px; font-size: 13px;
+}
+.cell { position: relative; isolation: isolate; padding: 0; border: none; background: none; cursor: pointer; scroll-margin: 160px 0 24px; }
+.cell .tape { width: 30px; height: 12px; top: -6px; margin-left: -15px; transform: rotate(-4deg); }
+/* Missing: a washed-out copy, only the number stays clear. */
+.cell.none .cv { background-color: var(--paper-hi) !important; border-color: var(--grey); filter: grayscale(1) contrast(0.85); opacity: 0.5; }
+.cell.none .cv::after { content: ""; background-image: radial-gradient(var(--grey) 1px, transparent 1.5px); background-size: 4px 4px; }
+.cell.none .num { background: var(--muted); }
+.cell.sel { outline: 3px solid var(--pink); outline-offset: 3px; }
+.cell.sel.none .cv { opacity: 0.85; }
+.stamp {
+  position: absolute; left: 50%; top: 38%; z-index: 2; transform: translate(-50%, -50%) rotate(-12deg);
+  border: 2px solid var(--ink); background: var(--paper); font-family: var(--display); font-size: 11px; line-height: 1;
+  padding: 2px 4px 1px; white-space: nowrap; pointer-events: none;
+}
+.stamp b { font-family: var(--mono); font-size: 11px; margin-left: 3px; }
+.wish {
+  position: absolute; right: -3px; top: -5px; z-index: 3; background: var(--ink); color: var(--paper);
+  font-family: var(--mono); font-weight: 700; font-size: 10px; padding: 1px 4px; pointer-events: none;
+}
+.cell .date { position: absolute; right: -3px; top: 8px; z-index: 3; font-size: 10px; padding: 1px 3px; pointer-events: none; }
+.loading { border: 2px dashed var(--ink); padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.bar { display: block; height: 10px; border: 2px solid var(--ink); background: var(--paper-hi); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 35%; background: var(--ink); }
+.confirm { background: var(--ink); color: var(--paper); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.confirm p { margin: 0; font-size: 15px; line-height: 1.4; }
+.confirm .btn.ghost { background: transparent; color: var(--paper); border-color: var(--paper); }
+@media (prefers-reduced-motion: no-preference) {
+  .bar i { animation: copier 1.4s ease-in-out infinite alternate; }
+  @keyframes copier { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+}
+
 /* ---------- Shell: folded (one column, bottom Fehldruck bar) ---------- */
 .app { min-height: 100dvh; }
 .panes { padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom)); }
@@ -172,6 +228,8 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-weight: 700;
   .pane.detail { display: flex; flex: 1; min-width: 0; padding: 32px 28px 24px; }
   .sheet, .sheet-back { display: none; }
   .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .runhead { top: -32px; margin: 0 -28px; padding: 12px 28px 10px; }
+  .run { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 12px 10px; }
 }
 
 /* Tonight's covers lean like flyers on a wall. */

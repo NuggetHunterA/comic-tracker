@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { buildPlan, readableFrom, type Evening, type PlanIssue } from "./plan";
 import { supabase } from "./supabase";
 import { todayIso } from "./dates";
@@ -110,9 +110,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [today, setToday] = useState(todayIso());
 
+  // Catalog rows the screens fetched on their own, kept across reloads.
+  const extra = useRef({ issues: new Map<number, Issue>(), series: new Map<number, Series>() });
+
   const reload = useCallback(async () => {
     try {
-      setData(await load());
+      const d = await load();
+      for (const [id, i] of extra.current.issues) if (!d.issues.has(id)) d.issues.set(id, i);
+      for (const [id, s] of extra.current.series) if (!d.series.has(id)) d.series.set(id, s);
+      setData(d);
       setError(null);
       setToday(todayIso());
     } catch (e) {
@@ -128,6 +134,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [reload]);
 
   const remember = useCallback((issues: Issue[], series: Series[]) => {
+    for (const i of issues) extra.current.issues.set(i.id, i);
+    for (const s of series) extra.current.series.set(s.id, s);
     setData((d) => {
       if (!d) return d;
       const im = new Map(d.issues);
@@ -200,6 +208,16 @@ export const actions = {
     ]),
   markUnread: (issueId: number) =>
     check(supabase.from("user_issues").update({ status: "pile", read_on: null, rating: null }).eq("issue_id", issueId)),
+  /** Read before the app knew about it: no reading date, never on the pile. */
+  markReadEarlier: (issueId: number) =>
+    check(supabase.from("user_issues").upsert({ issue_id: issueId, status: "read", format: null, read_on: null, skip_plan: false }, { onConflict: "user_id,issue_id" })),
+  /** Marks every issue up to a number as read earlier, leaving the pile alone. */
+  markReadUpTo: async (issueIds: number[]) => {
+    const rows = issueIds.map((id) => ({ issue_id: id, status: "read", format: null, read_on: null, skip_plan: false }));
+    for (let i = 0; i < rows.length; i += 500) {
+      await check(supabase.from("user_issues").upsert(rows.slice(i, i + 500), { onConflict: "user_id,issue_id" }));
+    }
+  },
   rate: (issueId: number, rating: number | null) =>
     check(supabase.from("user_issues").update({ rating }).eq("issue_id", issueId)),
   pin: (issueId: number, evening: string, slot: number) =>

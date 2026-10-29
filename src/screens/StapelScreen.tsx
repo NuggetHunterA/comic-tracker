@@ -3,8 +3,15 @@ import { useStore, type Item } from "../lib/store";
 import { shortDate } from "../lib/dates";
 import { issueTitle, seriesLong, seriesTitle } from "../lib/labels";
 import { Cover } from "../components/Cover";
+import { useSeriesRange } from "../components/AllIssues";
+import { AllIssuesButton } from "./SerienScreen";
 
-export type StapelSel = { kind: "series"; id: number } | { kind: "issue"; id: number; series?: number } | { kind: "import" } | null;
+export type StapelSel =
+  | { kind: "series"; id: number }
+  | { kind: "all"; id: number; sel?: number }
+  | { kind: "issue"; id: number; series?: number; fromAll?: boolean }
+  | { kind: "import" }
+  | null;
 type Filter = "alle" | "print" | "infinite" | "gelesen";
 
 const isOpen = (i: Item) => i.ui.status === "pile" || i.ui.status === "expected";
@@ -71,8 +78,8 @@ export function StapelList({ wide, sel, onSelect }: { wide: boolean; sel: Stapel
       {wide ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           {groups.map(([sid, list]) => (
-            <button key={sid} type="button" className={`sr ${sel?.kind === "series" && sel.id === sid ? "on" : ""}`}
-              aria-current={sel?.kind === "series" && sel.id === sid ? "true" : undefined}
+            <button key={sid} type="button" className={`sr ${(sel?.kind === "series" || sel?.kind === "all") && sel.id === sid ? "on" : ""}`}
+              aria-current={(sel?.kind === "series" || sel?.kind === "all") && sel.id === sid ? "true" : undefined}
               onClick={() => onSelect({ kind: "series", id: sid })}>
               <Cover issue={list[0].issue} showNumber={false} />
               <strong style={{ flex: 1, fontSize: 17 }}>{seriesTitle(list[0].series)}</strong>
@@ -88,7 +95,10 @@ export function StapelList({ wide, sel, onSelect }: { wide: boolean; sel: Stapel
             return (
               <div key={sid} className="grp">
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                  <strong style={{ fontSize: 18 }}>{seriesTitle(list[0].series)}</strong>
+                  <button type="button" className="grphead" onClick={() => onSelect({ kind: "all", id: sid })} aria-label={`Alle Hefte von ${seriesTitle(list[0].series)}`}>
+                    {seriesTitle(list[0].series)}
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
+                  </button>
                   <span className="d" style={{ fontSize: 14 }}>{list.length} {reading ? "GELESEN" : "OFFEN"}</span>
                 </div>
                 <div className="row">
@@ -136,6 +146,7 @@ export function StapelList({ wide, sel, onSelect }: { wide: boolean; sel: Stapel
 /** Wide detail: all issues of one series on the pile. */
 export function StapelSeries({ seriesId, onSelect }: { seriesId: number; onSelect: (s: StapelSel) => void }) {
   const { data, items, plan, today } = useStore();
+  const range = useSeriesRange(seriesId);
   const list = items.filter((i) => i.issue.series_id === seriesId && isOpen(i) && i.readable)
     .sort((a, b) => (a.issue.sort_number ?? 0) - (b.issue.sort_number ?? 0));
   const read = items.filter((i) => i.issue.series_id === seriesId && i.ui.status === "read").length;
@@ -158,6 +169,7 @@ export function StapelSeries({ seriesId, onSelect }: { seriesId: number; onSelec
           </button>
         ))}
       </div>
+      <AllIssuesButton range={range} onClick={() => onSelect({ kind: "all", id: seriesId })} />
       {firstDay && <span className="mut" style={{ fontSize: 14 }}>Im Plan ab {firstDay === today ? "heute" : shortDate(firstDay)}, {data?.settings.max_per_evening} Hefte pro Abend.</span>}
     </>
   );

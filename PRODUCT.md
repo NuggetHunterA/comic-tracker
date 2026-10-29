@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-Delegated and approved: Vite + React + TypeScript as an installable PWA on GitHub Pages (`/comic-tracker/`). Data in the Supabase project sport-recap, own schema `comics`, login by email magic link. The `metron` Edge Function syncs Metron hourly via pg_cron (catalog for last month to two months ahead, issue details and arcs for the pile) and serves series search for the app.
+Delegated and approved: Vite + React + TypeScript as an installable PWA on GitHub Pages (`/comic-tracker/`). Data in the Supabase project sport-recap, own schema `comics`, login by email magic link. The `metron` Edge Function syncs Metron hourly via pg_cron (followed series and the catalog for last month to two months ahead) and serves series search for the app.
 
 ## Users
 
@@ -31,10 +31,10 @@ Unlike pull-list apps (League of Comic Geeks etc.), it plans the reading itself:
 
 ## Capabilities and Constraints
 
-- Areas: Plan (today + next 14 evenings), Stapel (pile), Katalog (monthly releases, tabs DC and Marvel + Image, cover grid), Meine Serien (followed series + wishlist).
+- Areas: Plan (today + next 14 evenings), Stapel (pile), Katalog (monthly releases, tabs DC and Marvel + Image, cover grid), Meine Serien (followed series, wishlist, events).
 - Series: search any Metron series from Meine Serien; every series has "Alle Hefte", the full run of that volume newest first, each issue marked read, on the pile or missing. Older issues can be marked as read earlier (no reading date), one by one or up to a number, and a series can be put on the pile from a number on (as regular pile issues, after the old pile); read and pile issues stay untouched.
 - Issue states: Wunschliste, Erwartet, Stapel, Gelesen. Formats: Print and Infinite (Ultra). Adrian reads in the subscription or buys print, never digital single issues.
-- Plan rules: only readable issues; series in number order; old pile first, then new issues; read a story arc in one go (Metron story arcs; crossover arcs in arc order), switch series only after an arc ends; without arc data, read blocks of several issues per series; max 3 per evening; manual moves are pinned.
+- Plan rules: only readable issues; series in number order; old pile first, then new issues; read an event in one go (events are cross-series reading orders Adrian keeps in Meine Serien, each with a colour; Metron story arcs are not used), switch series only after an event; a started event comes first every evening as far as its issues are readable; without an event, read blocks of several issues per series; max 3 per evening; manual moves are pinned.
 - Rating on read: 1 to 10, whole steps.
 - Annuals and specials of followed series go to the wishlist only. Relaunches are suggested, never auto-followed.
 - Only the main cover is shown.

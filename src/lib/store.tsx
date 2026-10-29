@@ -2,7 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { buildPlan, readableFrom, stalledSeries, type Evening, type PlanIssue } from "./plan";
 import { supabase } from "./supabase";
 import { todayIso } from "./dates";
-import type { ArcLink, Followed, Format, Issue, PlanPin, Series, Settings, UserIssue } from "./types";
+import { eventOrder, insertAt } from "./events";
+import type { EventIssue, EventRow, Followed, Format, Issue, PlanPin, Series, Settings, UserIssue } from "./types";
 
 export interface Item {
   issue: Issue;
@@ -20,9 +21,23 @@ export interface Data {
   userIssues: Map<number, UserIssue>;
   issues: Map<number, Issue>;
   series: Map<number, Series>;
-  arcs: ArcLink[];
-  arcNames: Map<number, string>;
+  events: EventRow[];
+  eventIssues: EventIssue[];
   pins: PlanPin[];
+}
+
+/** An event with its issues in reading order. */
+export interface EventView {
+  event: EventRow;
+  order: Issue[];
+  read: number;
+}
+
+/** Where an issue sits in its event, for the markers. */
+export interface EventMark {
+  event: EventRow;
+  part: number;
+  total: number;
 }
 
 interface Store {
@@ -31,6 +46,8 @@ interface Store {
   today: string;
   items: Item[];
   plan: Evening[];
+  events: EventView[];
+  eventOf: Map<number, EventMark>;
   /** Series held up by an issue without a reading date, and how many issues wait behind it. */
   stalled: { issueId: number; behind: number }[];
   reload: () => Promise<void>;
@@ -51,18 +68,21 @@ async function inChunks<T>(ids: number[], fetch: (chunk: number[]) => PromiseLik
 }
 
 async function load(): Promise<Data> {
-  const [settings, followed, wishlist, dismissed, userIssues, pins] = await Promise.all([
+  const [settings, followed, wishlist, dismissed, userIssues, pins, events, eventIssues] = await Promise.all([
     supabase.from("settings").select("infinite_delay_days, max_per_evening").maybeSingle(),
     supabase.from("followed_series").select("series_id, default_format, paused, created_at"),
     supabase.from("wishlist_series").select("series_id"),
     supabase.from("dismissed_suggestions").select("series_id"),
     supabase.from("user_issues").select("issue_id, status, format, old_pile, bought_on, read_on, rating, skip_plan"),
     supabase.from("plan_entries").select("issue_id, evening, slot, pinned"),
+    supabase.from("events").select("id, name, short, color, manual_order, created_at").order("created_at"),
+    supabase.from("event_issues").select("event_id, issue_id, position"),
   ]);
-  for (const r of [settings, followed, wishlist, dismissed, userIssues, pins]) if (r.error) throw r.error;
+  for (const r of [settings, followed, wishlist, dismissed, userIssues, pins, events, eventIssues]) if (r.error) throw r.error;
 
   const uis = (userIssues.data ?? []) as UserIssue[];
-  const issueIds = uis.map((u) => u.issue_id);
+  const links = (eventIssues.data ?? []) as EventIssue[];
+  const issueIds = [...new Set([...uis.map((u) => u.issue_id), ...links.map((l) => l.issue_id)])];
   const issues = await inChunks<Issue>(issueIds, (c) =>
     supabase.from("issues").select("id, series_id, number, sort_number, store_date, cover_url, is_annual").in("id", c),
   );
@@ -76,19 +96,6 @@ async function load(): Promise<Data> {
   const series = await inChunks<Series>(seriesIds, (c) =>
     supabase.from("series").select("id, name, year_began, publisher, volume, status").in("id", c),
   );
-  const openIds = uis.filter((u) => u.status !== "read" && u.status !== "dismissed").map((u) => u.issue_id);
-  const myLinks = await inChunks<ArcLink>(openIds, (c) =>
-    supabase.from("arc_issues").select("arc_id, issue_id, position").in("issue_id", c),
-  );
-  const arcIds = [...new Set(myLinks.map((a) => a.arc_id))];
-  // Whole arcs, so the detail can say "Teil 2 von 5".
-  const arcs = await inChunks<ArcLink>(arcIds, (c) =>
-    supabase.from("arc_issues").select("arc_id, issue_id, position").in("arc_id", c),
-  );
-  const arcNames = await inChunks<{ id: number; name: string }>(arcIds, (c) =>
-    supabase.from("arcs").select("id, name").in("id", c),
-  );
-
   if (!settings.data) await supabase.from("settings").insert({});
 
   return {
@@ -99,8 +106,8 @@ async function load(): Promise<Data> {
     userIssues: new Map(uis.map((u) => [u.issue_id, u])),
     issues: new Map(issues.map((i) => [i.id, i])),
     series: new Map(series.map((s) => [s.id, s])),
-    arcs,
-    arcNames: new Map(arcNames.map((a) => [a.id, a.name])),
+    events: (events.data ?? []) as EventRow[],
+    eventIssues: links,
     pins: (pins.data ?? []) as PlanPin[],
   };
 }
@@ -160,13 +167,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return out;
   }, [data, today]);
 
+  const { events, eventOf } = useMemo(() => {
+    const views: EventView[] = [];
+    const marks = new Map<number, EventMark>();
+    if (!data) return { events: views, eventOf: marks };
+    for (const event of data.events) {
+      const order = eventOrder(event, data.eventIssues, data.issues);
+      order.forEach((i, k) => marks.set(i.id, { event, part: k + 1, total: order.length }));
+      views.push({ event, order, read: order.filter((i) => data.userIssues.get(i.id)?.status === "read").length });
+    }
+    return { events: views, eventOf: marks };
+  }, [data]);
+
   const { plan, stalled } = useMemo(() => {
     if (!data) return { plan: [] as Evening[], stalled: [] };
-    const arcsByIssue = new Map<number, { arcId: number; position: number }[]>();
-    for (const a of data.arcs) {
-      if (!arcsByIssue.has(a.issue_id)) arcsByIssue.set(a.issue_id, []);
-      arcsByIssue.get(a.issue_id)!.push({ arcId: a.arc_id, position: a.position });
-    }
+    // Started events go first, the one read in most recently ahead.
+    const lastRead = (v: EventView) => v.order.reduce((m, i) => {
+      const ui = data.userIssues.get(i.id);
+      return ui?.status === "read" && (ui.read_on ?? "0000") > m ? ui.read_on ?? "0000" : m;
+    }, "");
+    const startedEvents = events.filter((v) => v.read > 0).sort((a, b) => lastRead(b).localeCompare(lastRead(a))).map((v) => v.event.id);
     const open = items.filter((i) => (i.ui.status === "pile" || i.ui.status === "expected") && !i.ui.skip_plan);
     const planIssues: PlanIssue[] = open.map((i) => ({
       id: i.issue.id,
@@ -175,23 +195,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       storeDate: i.issue.store_date,
       oldPile: i.ui.old_pile,
       readableFrom: i.readableFrom,
-      arcs: arcsByIssue.get(i.issue.id) ?? [],
+      event: eventOf.has(i.issue.id) ? { id: eventOf.get(i.issue.id)!.event.id, position: eventOf.get(i.issue.id)!.part } : null,
     }));
     const openIds = new Set(open.map((i) => i.issue.id));
     const pins = data.pins
       .filter((p) => p.pinned && openIds.has(p.issue_id))
       .map((p) => ({ issueId: p.issue_id, evening: p.evening, slot: p.slot }));
     return {
-      plan: buildPlan({ issues: planIssues, pins, today, maxPerEvening: data.settings.max_per_evening }),
+      plan: buildPlan({ issues: planIssues, pins, today, maxPerEvening: data.settings.max_per_evening, startedEvents }),
       stalled: stalledSeries(planIssues).map((s) => ({ issueId: s.issue.id, behind: s.behind })),
     };
-  }, [data, items, today]);
+  }, [data, items, today, events, eventOf]);
 
   const value = useMemo(
-    () => ({ data, error, today, items, plan, stalled, reload, remember }),
-    [data, error, today, items, plan, stalled, reload, remember],
+    () => ({ data, error, today, items, plan, events, eventOf, stalled, reload, remember }),
+    [data, error, today, items, plan, events, eventOf, stalled, reload, remember],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+/** The store where there may be none (a cover drawn outside the app shell). */
+export function useMaybeStore(): Store | null {
+  return useContext(Ctx);
 }
 
 export function useStore(): Store {
@@ -272,4 +297,35 @@ export const actions = {
   dismissSuggestion: (seriesId: number) =>
     check(supabase.from("dismissed_suggestions").upsert({ series_id: seriesId }, { onConflict: "user_id,series_id" })),
   saveSettings: (s: Settings) => check(supabase.from("settings").upsert(s, { onConflict: "user_id" })),
+  createEvent: async (name: string, short: string, color: string): Promise<number> => {
+    const { data } = await check(supabase.from("events").insert({ name, short, color }).select("id").single());
+    return (data as { id: number }).id;
+  },
+  updateEvent: (eventId: number, patch: Partial<Pick<EventRow, "name" | "short" | "color">>) =>
+    check(supabase.from("events").update(patch).eq("id", eventId)),
+  deleteEvent: (eventId: number) => check(supabase.from("events").delete().eq("id", eventId)),
+  /**
+   * Adds an issue to an event (moving it out of another one) and onto the
+   * pile if it is not there yet. In an event sorted by hand it goes in by its
+   * date; read issues stay read.
+   */
+  addToEvent: async (view: EventView, issue: Issue, ui: UserIssue | undefined, format: Format) => {
+    if (!ui || ui.status === "wishlist" || ui.status === "dismissed") {
+      await check(supabase.from("user_issues").upsert({ issue_id: issue.id, status: "pile", format, skip_plan: false }, { onConflict: "user_id,issue_id" }));
+    }
+    const order = view.order.filter((i) => i.id !== issue.id);
+    if (!view.event.manual_order) {
+      await check(supabase.from("event_issues").upsert({ event_id: view.event.id, issue_id: issue.id, position: 0 }, { onConflict: "user_id,issue_id" }));
+      return;
+    }
+    order.splice(insertAt(order, issue), 0, issue);
+    await check(supabase.from("event_issues").upsert(order.map((i, k) => ({ event_id: view.event.id, issue_id: i.id, position: k + 1 })), { onConflict: "user_id,issue_id" }));
+  },
+  removeFromEvent: (issueId: number) => check(supabase.from("event_issues").delete().eq("issue_id", issueId)),
+  /** Keeps the event in this order from now on. */
+  reorderEvent: async (eventId: number, issueIds: number[]) => {
+    await check(supabase.from("event_issues").upsert(issueIds.map((id, k) => ({ event_id: eventId, issue_id: id, position: k + 1 })), { onConflict: "user_id,issue_id" }));
+    await check(supabase.from("events").update({ manual_order: true }).eq("id", eventId));
+  },
+  sortEventByDate: (eventId: number) => check(supabase.from("events").update({ manual_order: false }).eq("id", eventId)),
 };

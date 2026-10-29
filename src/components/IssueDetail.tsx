@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { actions, useStore } from "../lib/store";
 import { addDays, dateLabel, dayLabel, shortDate } from "../lib/dates";
@@ -40,11 +40,26 @@ function Icon({ name }: { name: keyof typeof ICON }) {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="square" aria-hidden="true">{ICON[name]}</svg>;
 }
 
+// On a desktop there is room to show everything under Mehr at once.
+const DESK = "(min-width: 1300px)";
+function useDesk() {
+  const [desk, setDesk] = useState(() => window.matchMedia(DESK).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(DESK);
+    const on = () => setDesk(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return desk;
+}
+
 function IssueDetailBody({ issueId, onClose, fromRun }: Props) {
   const { data, today, plan } = useStore();
   const { run, busy, error } = useRun();
   const [pickFormat, setPickFormat] = useState<Format>("infinite");
   const [moreOpen, setMoreOpen] = useState(false);
+  const desk = useDesk();
+  const showMore = moreOpen || desk;
   const head = useRef<HTMLDivElement>(null);
   // What was just done here, so only that plays its moment (not every time the detail opens).
   const [stamped, setStamped] = useState<number | null>(null);
@@ -132,14 +147,14 @@ function IssueDetailBody({ issueId, onClose, fromRun }: Props) {
   const moreCount = more.length + (hasRange ? 2 : 0) + (onPile && isDC ? 1 : 0) + (onPile || ui?.status === "wishlist" ? 1 : 0);
 
   return (
-    <div className="issue-detail" style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1 }}>
-      <div ref={head} style={{ display: "flex", gap: 18, alignItems: "flex-start" }}>
+    <div className="issue-detail">
+      <div ref={head} className="dhead">
         <Cover issue={issue} readable={!ui || readable || ui.status === "read"} showNumber={false} tape={ui?.status === "read" ? "GELESEN" : true} style={{ width: "var(--detail-cover, 96px)", flex: "none", transform: "rotate(-1.5deg)" }}>
           {ui?.status === "read" && ui.rating && <span key={ui.rating} className={`stamp grade ${stamped === ui.rating ? "hit" : ""}`}>{ui.rating}<b>/10</b></span>}
           {ui?.status === "wishlist" && <span className={`pinned ${pinned ? "swing" : ""}`}><span className="pin" /><span className="lbl">WUNSCH</span></span>}
         </Cover>
-        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
-          <h2 style={{ fontSize: 26, lineHeight: 1 }}>{justFollowed && followed ? <span className="marker fresh">{title}</span> : title}</h2>
+        <div className="dmeta">
+          <h2>{justFollowed && followed ? <span className="marker fresh">{title}</span> : title}</h2>
           <div className="facts">
             {issue.store_date && (
               <div className="kv"><span>ERSCHEINT</span><span>{dateLabel(issue.store_date, today)}</span></div>
@@ -161,13 +176,13 @@ function IssueDetailBody({ issueId, onClose, fromRun }: Props) {
         <div className="readas"><span>LESEN ALS</span><FormatChips value={pickFormat} onChange={setPickFormat} /></div>
       )}
 
-      {ui?.status === "read" && (
+      {ui?.status === "read" && !desk && (
         <button type="button" className="morehead" aria-expanded={moreOpen} onClick={() => setMoreOpen(!moreOpen)}>
           <span>Mehr</span><span className="n">{moreCount}</span><Chevron open={moreOpen} />
         </button>
       )}
 
-      {moreOpen && (
+      {showMore && moreCount > 0 && (
         <div className="morelist" role="group" aria-label="Mehr">
           {more.filter((m) => !m.warn).map(moreRow)}
           {onPile && isDC && (
@@ -209,7 +224,7 @@ function IssueDetailBody({ issueId, onClose, fromRun }: Props) {
           ) : (
             <button key={sl.label} type="button" className="slot" title={sl.title} disabled={busy} onClick={sl.onClick}><Icon name={sl.icon} />{sl.label}</button>
           ))}
-          {moreCount > 0 && (
+          {moreCount > 0 && !desk && (
             <button type="button" className={`slot ${moreOpen ? "on" : ""}`} aria-expanded={moreOpen} onClick={() => setMoreOpen(!moreOpen)}><Icon name="dots" />Mehr</button>
           )}
         </div>

@@ -32,6 +32,7 @@ Unlike pull-list apps (League of Comic Geeks etc.), it plans the reading itself:
 ## Capabilities and Constraints
 
 - Areas: Plan (today + next 14 evenings), Stapel (pile), Katalog (monthly releases, tabs DC and Marvel + Image, cover grid), Meine Serien (followed series + wishlist).
+- Series: search any Metron series from Meine Serien; every series has "Alle Hefte", the full run of that volume newest first, each issue marked read, on the pile or missing. Older issues can be marked as read earlier (no reading date), one by one or up to a number, and a series can be put on the pile from a number on (as regular pile issues, after the old pile); read and pile issues stay untouched.
 - Issue states: Wunschliste, Erwartet, Stapel, Gelesen. Formats: Print and Infinite (Ultra). Adrian reads in the subscription or buys print, never digital single issues.
 - Plan rules: only readable issues; series in number order; old pile first, then new issues; read a story arc in one go (Metron story arcs; crossover arcs in arc order), switch series only after an arc ends; without arc data, read blocks of several issues per series; max 3 per evening; manual moves are pinned.
 - Rating on read: 1 to 10, whole steps.

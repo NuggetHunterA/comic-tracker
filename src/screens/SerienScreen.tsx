@@ -4,13 +4,18 @@ import { forgetInfiniteLinks } from "../lib/infiniteLink";
 import { actions, useStore } from "../lib/store";
 import { shortDate } from "../lib/dates";
 import { FORMAT_LABEL, issueTitle, seriesLong } from "../lib/labels";
-import type { Format, Issue, Series } from "../lib/types";
+import type { Issue, Series } from "../lib/types";
 import { Cover } from "../components/Cover";
 import { FormatChips } from "../components/FormatChips";
 import { SeriesSearch, type FoundSeries } from "../components/SeriesSearch";
 import { useRun } from "../components/useRun";
+import { AllIssues, useSeriesRange } from "../components/AllIssues";
 
-export type SerienSel = { kind: "series"; id: number } | { kind: "issue"; id: number } | { kind: "add" } | null;
+export type SerienSel =
+  | { kind: "series"; id: number; found?: FoundSeries }
+  | { kind: "all"; id: number; sel?: number }
+  | { kind: "issue"; id: number; back?: SerienSel }
+  | null;
 export type SerienTab = "serien" | "wunsch";
 
 interface Relaunch { old: number; series: Series; first: Issue | null }
@@ -49,6 +54,8 @@ export function SerienList({ tab, setTab, sel, onSelect }: {
 }) {
   const { data, items } = useStore();
   const { run, busy } = useRun();
+  const [searching, setSearching] = useState(false);
+  const followedIds = useMemo(() => new Set(data?.followed.map((f) => f.series_id)), [data]);
   if (!data) return null;
   const wishIssues = items.filter((i) => i.ui.status === "wishlist").sort((a, b) => (a.issue.store_date ?? "").localeCompare(b.issue.store_date ?? ""));
   const wishCount = wishIssues.length + data.wishlistSeries.length;
@@ -64,17 +71,20 @@ export function SerienList({ tab, setTab, sel, onSelect }: {
 
       {tab === "serien" ? (
         <>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
+          <SeriesSearch followed={followedIds} onActive={setSearching}
+            picked={sel?.kind === "series" ? sel.id : undefined}
+            onPick={(found) => onSelect({ kind: "series", id: found.id, found })} />
+          {!searching && <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
             {data.followed.length === 0 && (
               <div className="empty">
                 <strong>Du folgst noch keiner Serie.</strong>
-                <span className="mut">Neue Hefte gefolgter Serien landen automatisch auf dem Stapel.</span>
+                <span className="mut">Such oben nach einer Serie. Neue Hefte gefolgter Serien landen automatisch auf dem Stapel.</span>
               </div>
             )}
             {data.followed.map((f) => {
               const s = data.series.get(f.series_id);
               const cover = items.find((i) => i.issue.series_id === f.series_id)?.issue;
-              const on = sel?.kind === "series" && sel.id === f.series_id;
+              const on = (sel?.kind === "series" || sel?.kind === "all") && sel.id === f.series_id;
               const ended = s?.status && /cancel|complet|end/i.test(s.status);
               return (
                 <button key={f.series_id} type="button" className={`sr ${on ? "on" : ""}`} aria-current={on ? "true" : undefined}
@@ -88,8 +98,7 @@ export function SerienList({ tab, setTab, sel, onSelect }: {
                 </button>
               );
             })}
-          </div>
-          <button type="button" className="btn" style={{ alignSelf: "flex-start" }} onClick={() => onSelect({ kind: "add" })}>Serie hinzufügen</button>
+          </div>}
         </>
       ) : (
         <section aria-label="Wunschliste" style={{ display: "flex", flexDirection: "column" }}>
@@ -131,13 +140,17 @@ export function SerienList({ tab, setTab, sel, onSelect }: {
   );
 }
 
-export function SeriesDetail({ seriesId, onSelect, onGone }: { seriesId: number; onSelect: (s: SerienSel) => void; onGone: () => void }) {
+export function SeriesDetail({ seriesId, found, onSelect, onGone }: {
+  seriesId: number; found?: FoundSeries; onSelect: (s: SerienSel) => void; onGone: () => void;
+}) {
   const { data, items } = useStore();
   const { run, busy, error } = useRun();
   const relaunches = useRelaunches();
+  const range = useSeriesRange(seriesId);
   if (!data) return null;
   const s = data.series.get(seriesId);
   const f = data.followed.find((x) => x.series_id === seriesId);
+  if (!f) return <UnfollowedSeries seriesId={seriesId} found={found} onSelect={onSelect} />;
   const open = items.filter((i) => i.issue.series_id === seriesId && (i.ui.status === "pile" || i.ui.status === "expected"))
     .sort((a, b) => (a.issue.sort_number ?? 0) - (b.issue.sort_number ?? 0));
   const read = items.filter((i) => i.issue.series_id === seriesId && i.ui.status === "read").length;
@@ -157,7 +170,7 @@ export function SeriesDetail({ seriesId, onSelect, onGone }: { seriesId: number;
             {relaunch.series.name} ({relaunch.series.year_began}){relaunch.first?.store_date ? ` #${relaunch.first.number} erscheint am ${shortDate(relaunch.first.store_date)}` : ""}
           </span>
           <div style={{ display: "flex", gap: 10 }}>
-            <button type="button" className="btn hot" disabled={busy} onClick={() => run(() => actions.follow(relaunch.series.id, f?.default_format ?? "infinite"))}>Folgen</button>
+            <button type="button" className="btn hot" disabled={busy} onClick={() => run(() => actions.follow(relaunch.series.id, f.default_format))}>Folgen</button>
             <button type="button" className="btn" style={{ background: "transparent", color: "var(--paper)", borderColor: "var(--paper)" }} disabled={busy}
               onClick={() => run(() => actions.dismissSuggestion(relaunch.series.id))}>Nicht folgen</button>
           </div>
@@ -165,22 +178,21 @@ export function SeriesDetail({ seriesId, onSelect, onGone }: { seriesId: number;
       )}
       <div className="grid" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 10 }}>
         {open.map((i) => (
-          <button key={i.issue.id} type="button" className="tile" onClick={() => onSelect({ kind: "issue", id: i.issue.id })} aria-label={issueTitle(i.issue, i.series)}>
+          <button key={i.issue.id} type="button" className="tile" onClick={() => onSelect({ kind: "issue", id: i.issue.id, back: { kind: "series", id: seriesId } })} aria-label={issueTitle(i.issue, i.series)}>
             <Cover issue={i.issue} readable={i.readable} />
           </button>
         ))}
       </div>
-      {f && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: "auto" }}>
-          <span style={{ fontWeight: 700, fontSize: 15 }}>Standardformat für neue Hefte</span>
-          <FormatChips value={f.default_format} allowInfinite={isDC} onChange={(fmt) => run(() => actions.setDefaultFormat(seriesId, fmt))} />
-          <div style={{ display: "flex", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
-            <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.setPaused(seriesId, !f.paused))}>{f.paused ? "Fortsetzen" : "Pausieren"}</button>
-            <button type="button" className="btn" disabled={busy} onClick={() => run(async () => { await actions.unfollow(seriesId); onGone(); })}>Nicht mehr folgen</button>
-          </div>
-          {isDC && <InfiniteSeriesLink seriesId={seriesId} />}
+      <AllIssuesButton range={range} onClick={() => onSelect({ kind: "all", id: seriesId })} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: "auto" }}>
+        {isDC && <span style={{ fontWeight: 700, fontSize: 15 }}>Standardformat für neue Hefte</span>}
+        <FormatChips value={f.default_format} allowInfinite={isDC} onChange={(fmt) => run(() => actions.setDefaultFormat(seriesId, fmt))} />
+        <div style={{ display: "flex", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
+          <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.setPaused(seriesId, !f.paused))}>{f.paused ? "Fortsetzen" : "Pausieren"}</button>
+          <button type="button" className="btn" disabled={busy} onClick={() => run(async () => { await actions.unfollow(seriesId); onGone(); })}>Nicht mehr folgen</button>
         </div>
-      )}
+        {isDC && <InfiniteSeriesLink seriesId={seriesId} />}
+      </div>
       {error && <p role="alert" className="stk" style={{ whiteSpace: "normal" }}>{error}</p>}
     </>
   );
@@ -227,47 +239,41 @@ function InfiniteSeriesLink({ seriesId }: { seriesId: number }) {
   );
 }
 
-export function AddSeries({ onDone }: { onDone: (seriesId: number) => void }) {
-  const { reload } = useStore();
-  const [pick, setPick] = useState<FoundSeries | null>(null);
-  const [format, setFormat] = useState<Format>("infinite");
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const isDC = useMemo(() => (pick?.publisher ?? "").startsWith("DC"), [pick]);
+export function AllIssuesButton({ range, onClick }: { range: string | null; onClick: () => void }) {
+  return (
+    <button type="button" className="btn solid allbtn" onClick={onClick}>
+      <span>Alle Hefte</span>
+      {range && <span className="d">{range}</span>}
+    </button>
+  );
+}
+
+/** A series found by search: no pile yet, so the whole run shows right away. */
+function UnfollowedSeries({ seriesId, found, onSelect }: { seriesId: number; found?: FoundSeries; onSelect: (s: SerienSel) => void }) {
+  const { data } = useStore();
+  const { run, busy, error } = useRun();
+  const s = data?.series.get(seriesId);
+  const publisher = s?.publisher ?? found?.publisher ?? null;
+  const isDC = (publisher ?? "").startsWith("DC");
+  const name = s ? seriesLong(s) : found ? (found.year_began && !found.name.includes(`(${found.year_began})`) ? `${found.name} (${found.year_began})` : found.name) : "Serie";
+  const meta = [publisher, found?.issue_count != null ? `${found.issue_count} Hefte` : null, "Du folgst nicht"].filter(Boolean).join(" · ").toUpperCase();
 
   async function follow() {
-    if (!pick) return;
-    setBusy(true);
-    setMsg("Hole die Serie von Metron …");
-    try {
-      await metron({ action: "sync-series", series_id: pick.id });
-      await actions.follow(pick.id, isDC ? format : "print");
-      await reload();
-      onDone(pick.id);
-    } catch (e) {
-      setMsg((e as { message?: string })?.message ?? "Das hat nicht geklappt.");
-    } finally {
-      setBusy(false);
-    }
+    if (!data?.series.has(seriesId)) await metron({ action: "sync-series", series_id: seriesId });
+    await actions.follow(seriesId, isDC ? "infinite" : "print");
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <h2 style={{ fontSize: 30 }}>Serie hinzufügen</h2>
-      <span className="mut" style={{ fontSize: 15 }}>Ab jetzt landen neue Hefte automatisch auf dem Stapel. Ältere Hefte trägst du als Altbestand ein.</span>
-      <SeriesSearch picked={pick?.id} onPick={(s) => { setPick(s); setFormat((s.publisher ?? "").startsWith("DC") ? "infinite" : "print"); }} />
-      {pick && (
-        <>
-          {isDC && (
-            <>
-              <span style={{ fontWeight: 700, fontSize: 15 }}>Wie liest du {pick.name}?</span>
-              <FormatChips value={format} onChange={setFormat} />
-            </>
-          )}
-          <button type="button" className="btn solid" disabled={busy} onClick={follow}>{busy ? "Folge …" : "Folgen"}</button>
-        </>
-      )}
-      {msg && <p role="status" style={{ margin: 0 }}>{msg}</p>}
-    </div>
+    <>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <h2 style={{ fontSize: 32, lineHeight: 1 }}>{name}</h2>
+        <span className="d mut" style={{ fontSize: 13 }}>{meta}</span>
+      </div>
+      <button type="button" className="btn hot" disabled={busy} onClick={() => run(follow)}>{busy ? "Folge …" : "Folgen"}</button>
+      <span className="mut" style={{ fontSize: 14, marginTop: -6 }}>{isDC ? "Ab dann landen neue Hefte als Infinite auf dem Stapel. Das Format kannst du danach ändern." : "Ab dann landen neue Hefte als Print auf dem Stapel."}</span>
+      {error && <p role="alert" className="stk" style={{ whiteSpace: "normal" }}>{error}</p>}
+      <AllIssues seriesId={seriesId} title={false}
+        onSelect={(id) => onSelect({ kind: "issue", id, back: { kind: "series", id: seriesId, found } })} />
+    </>
   );
 }

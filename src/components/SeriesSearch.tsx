@@ -11,7 +11,14 @@ export interface FoundSeries {
 }
 
 /** Searches Metron through the edge function. */
-export function SeriesSearch({ onPick, picked }: { onPick: (s: FoundSeries) => void; picked?: number }) {
+export function SeriesSearch({ onPick, picked, followed, onActive }: {
+  onPick: (s: FoundSeries) => void;
+  picked?: number;
+  /** Marks these series as followed in the results. */
+  followed?: Set<number>;
+  /** Called with true while results are shown, false once the field is cleared. */
+  onActive?: (active: boolean) => void;
+}) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<FoundSeries[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -25,6 +32,7 @@ export function SeriesSearch({ onPick, picked }: { onPick: (s: FoundSeries) => v
     try {
       const r = await metron<{ results: FoundSeries[] }>({ action: "search-series", q: q.trim() });
       setResults(r.results);
+      onActive?.(true);
     } catch (err) {
       setError((err as { message?: string })?.message ?? "Suche fehlgeschlagen");
     } finally {
@@ -36,7 +44,10 @@ export function SeriesSearch({ onPick, picked }: { onPick: (s: FoundSeries) => v
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <form onSubmit={search} style={{ display: "flex", gap: 8 }}>
         <label className="sr-only" htmlFor="series-q">Serie suchen</label>
-        <input id="series-q" type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="z. B. Nightwing" autoComplete="off" />
+        <input id="series-q" type="text" value={q} onChange={(e) => {
+          setQ(e.target.value);
+          if (!e.target.value.trim() && results) { setResults(null); onActive?.(false); }
+        }} placeholder="z. B. Nightwing" autoComplete="off" />
         <button type="submit" className="btn solid" disabled={busy}>{busy ? "Suche …" : "Suchen"}</button>
       </form>
       {error && <p role="alert" className="stk" style={{ whiteSpace: "normal", margin: 0 }}>{error}</p>}
@@ -51,6 +62,7 @@ export function SeriesSearch({ onPick, picked }: { onPick: (s: FoundSeries) => v
                   {[s.publisher, s.series_type, s.issue_count != null ? `${s.issue_count} HEFTE` : null].filter(Boolean).join(" · ").toUpperCase()}
                 </span>
               </span>
+              {followed?.has(s.id) && <span className="tag">Gefolgt</span>}
             </button>
           ))}
         </div>

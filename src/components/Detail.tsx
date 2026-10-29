@@ -36,3 +36,12 @@ export function Detail({ wide, label, onClose, children }: { wide: boolean; labe
 export function EmptyDetail({ text }: { text: string }) {
   return <p className="mut" style={{ margin: "auto", fontSize: 16, maxWidth: 320, textAlign: "center" }}>{text}</p>;
 }
+
+export function BackButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return (
+    <button type="button" className="back" onClick={onClick}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+      {children}
+    </button>
+  );
+}

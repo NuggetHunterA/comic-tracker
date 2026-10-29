@@ -4,14 +4,16 @@ import { supabase } from "./lib/supabase";
 import { StoreProvider, useStore } from "./lib/store";
 import { monthLabel, monthStart } from "./lib/dates";
 import { Nav, TABS, type Tab } from "./components/Nav";
-import { Detail, EmptyDetail } from "./components/Detail";
+import { BackButton, Detail, EmptyDetail } from "./components/Detail";
+import { AllIssues } from "./components/AllIssues";
+import { seriesLong } from "./lib/labels";
 import { IssueDetail } from "./components/IssueDetail";
 import { ImportForm } from "./components/ImportForm";
 import { Login } from "./screens/Login";
 import { PlanScreen } from "./screens/PlanScreen";
 import { StapelList, StapelSeries, type StapelSel } from "./screens/StapelScreen";
 import { KatalogList } from "./screens/KatalogScreen";
-import { AddSeries, SerienList, SeriesDetail, type SerienSel, type SerienTab } from "./screens/SerienScreen";
+import { SerienList, SeriesDetail, type SerienSel, type SerienTab } from "./screens/SerienScreen";
 
 const WIDE = "(min-width: 700px)";
 
@@ -108,9 +110,18 @@ function Shell() {
     const body =
       s?.kind === "import" ? <ImportForm onDone={closeStapel} /> :
       s?.kind === "series" ? <StapelSeries seriesId={s.id} onSelect={setStapelSel} /> :
+      s?.kind === "all" ? (
+        <AllIssues key={s.id} seriesId={s.id} sel={s.sel}
+          head={wide ? <BackButton onClick={() => setStapelSel({ kind: "series", id: s.id })}>{seriesLong(data?.series.get(s.id))}</BackButton> : undefined}
+          onSelect={(id) => setStapelSel({ kind: "issue", id, series: s.id, fromAll: true })} />
+      ) :
       s?.kind === "issue" ? (
         <>
-          {wide && s.series && <button type="button" className="btn" style={{ alignSelf: "flex-start" }} onClick={() => setStapelSel({ kind: "series", id: s.series! })}>← Zur Serie</button>}
+          {s.fromAll && s.series ? (
+            <BackButton onClick={() => setStapelSel({ kind: "all", id: s.series!, sel: s.id })}>Alle Hefte</BackButton>
+          ) : wide && s.series ? (
+            <BackButton onClick={() => setStapelSel({ kind: "series", id: s.series! })}>Zur Serie</BackButton>
+          ) : null}
           <IssueDetail issueId={s.id} onClose={closeStapel} />
         </>
       ) : wide ? <EmptyDetail text="Wähl links eine Serie, um ihre Hefte zu sehen." /> : null;
@@ -125,9 +136,18 @@ function Shell() {
     list = <SerienList wide={wide} tab={serienTab} setTab={setSerienTab} sel={serienSel} onSelect={setSerienSel} />;
     const s = serienSel;
     const body =
-      s?.kind === "add" ? <AddSeries onDone={(id) => setSerienSel({ kind: "series", id })} /> :
-      s?.kind === "series" ? <SeriesDetail seriesId={s.id} onSelect={setSerienSel} onGone={closeSerien} /> :
-      s?.kind === "issue" ? <IssueDetail issueId={s.id} onClose={closeSerien} /> :
+      s?.kind === "series" ? <SeriesDetail key={s.id} seriesId={s.id} found={s.found} onSelect={setSerienSel} onGone={closeSerien} /> :
+      s?.kind === "all" ? (
+        <AllIssues key={s.id} seriesId={s.id} sel={s.sel}
+          head={<BackButton onClick={() => setSerienSel({ kind: "series", id: s.id })}>{seriesLong(data?.series.get(s.id))}</BackButton>}
+          onSelect={(id) => setSerienSel({ kind: "issue", id, back: { kind: "all", id: s.id, sel: id } })} />
+      ) :
+      s?.kind === "issue" ? (
+        <>
+          {s.back && <BackButton onClick={() => setSerienSel(s.back!)}>{s.back.kind === "all" ? "Alle Hefte" : seriesLong(data?.series.get(s.back.id))}</BackButton>}
+          <IssueDetail issueId={s.id} onClose={closeSerien} />
+        </>
+      ) :
       wide ? <EmptyDetail text={serienTab === "serien" ? "Wähl links eine Serie." : "Wähl links ein Heft von der Wunschliste."} /> : null;
     detail = body ? <Detail wide={wide} label="Serie im Detail" onClose={closeSerien}>{body}</Detail> : null;
   }

@@ -131,7 +131,7 @@ function Shell() {
           ) : wide && s.series ? (
             <BackButton onClick={() => setStapelSel({ kind: "series", id: s.series! })}>Zur Serie</BackButton>
           ) : null}
-          <IssueDetail issueId={s.id} onClose={closeStapel} />
+          <IssueDetail issueId={s.id} onClose={closeStapel} fromRun={s.fromAll} />
         </>
       ) : wide ? <EmptyDetail text="Wähl links eine Serie, um ihre Hefte zu sehen." /> : null;
     detail = body ? <Detail wide={wide} label="Stapel im Detail" onClose={closeStapel}>{body}</Detail> : null;
@@ -155,7 +155,7 @@ function Shell() {
       s?.kind === "issue" ? (
         <>
           {s.back && <BackButton onClick={() => setSerienSel(s.back!)}>{s.back.kind === "all" ? "Alle Hefte" : seriesLong(data?.series.get(s.back.id))}</BackButton>}
-          <IssueDetail issueId={s.id} onClose={closeSerien} />
+          <IssueDetail issueId={s.id} onClose={closeSerien} fromRun={s.back?.kind === "all"} />
         </>
       ) :
       wide ? <EmptyDetail text={serienTab === "serien" ? "Wähl links eine Serie." : serienTab === "events" ? "Wähl links ein Event oder leg ein neues an." : "Wähl links ein Heft von der Wunschliste."} /> : null;

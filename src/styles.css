@@ -317,6 +317,68 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-weight: 700;
 @keyframes scanpass { from { background-position: 0 -20px; } 92% { background-position: 0 calc(100% + 20px); opacity: 1; } to { background-position: 0 calc(100% + 20px); opacity: 0; } }
 @keyframes dim { from { opacity: 0; } }
 
+/* ---------- Issue detail: compact facts, the toner bar at the bottom ---------- */
+.issue-detail .facts { display: flex; flex-direction: column; margin-top: 4px; }
+.issue-detail .facts .kv { padding: 5px 0; }
+.readas { display: flex; align-items: center; gap: 12px; }
+.readas > span, .morehead .n { font-family: var(--mono); color: var(--muted); font-size: 13px; }
+.readas .chip, .mrow .chip { min-height: 36px; font-size: 13px; padding: 0 10px; }
+.mrow .joined { flex-wrap: nowrap; }
+.morehead {
+  display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0; border: none; border-top: 2px solid var(--ink);
+  background: none; font-weight: 700; font-size: 15px; text-align: left; cursor: pointer;
+}
+.morehead > span:first-child { flex: 1; }
+.morelist { display: flex; flex-direction: column; border-top: 2px solid var(--ink); }
+.mrow {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 46px; width: 100%; padding: 0;
+  border: none; border-bottom: 1px solid var(--rule); background: none; font-size: 15px; text-align: left; cursor: pointer;
+}
+button.mrow:hover > span { text-decoration: underline; text-decoration-color: var(--pink); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.mrow:disabled { opacity: 0.45; cursor: default; }
+.mrow.warn { color: #9e0f4f; }
+.mrow .chev { flex: none; }
+.mrow.pick { display: block; padding: 10px 0 12px; }
+.morelist .confirm { margin: 6px 0; }
+/* Sticks to the bottom of the sheet or pane, so the main action stays under the thumb. */
+.toner {
+  position: sticky; z-index: 4; flex: none; display: flex; align-items: stretch; background: var(--ink); color: var(--paper);
+  margin-top: auto; height: calc(68px + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
+  bottom: calc(-20px - env(safe-area-inset-bottom)); margin-inline: -20px; margin-bottom: calc(-20px - env(safe-area-inset-bottom));
+}
+.toner .go {
+  position: relative; flex: 1.6; min-width: 0; margin: 8px 6px 8px 8px; border: none; background: var(--pink); color: var(--ink);
+  font-family: var(--display); font-size: 21px; line-height: 1; text-transform: uppercase; cursor: pointer;
+  box-shadow: -4px -3px 0 var(--paper);
+}
+.toner .go:disabled { opacity: 0.6; cursor: default; }
+.toner .go.wait { display: flex; align-items: center; justify-content: center; background: transparent; color: var(--pink); border: 2px solid var(--pink); box-shadow: none; font-family: var(--mono); font-weight: 700; font-size: 15px; }
+.toner .slot {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  border: none; background: transparent; color: var(--paper); text-decoration: none; cursor: pointer;
+  font-family: var(--mono); font-weight: 700; font-size: 11px; text-transform: uppercase;
+}
+.toner .slot + .slot { border-left: 1px solid #333; }
+.toner .slot svg { width: 22px; height: 22px; }
+.toner .slot:hover, .toner .slot.on { color: var(--pink); }
+.toner .slot:disabled { opacity: 0.45; cursor: default; }
+.toner.rate { gap: 4px; padding: 8px 6px calc(8px + env(safe-area-inset-bottom)); }
+.toner.rate button {
+  flex: 1; min-width: 0; border: 2px solid var(--paper); background: transparent; color: var(--paper);
+  font-family: var(--display); font-size: 18px; cursor: pointer;
+}
+.toner.rate button.on { background: var(--pink); border-color: var(--pink); color: var(--ink); }
+.toner.rate button:disabled { opacity: 0.6; }
+@media (min-width: 700px) {
+  .pane.detail .toner { bottom: -24px; margin-inline: -28px; margin-bottom: -24px; height: 68px; padding-bottom: 0; }
+  .pane.detail .toner.rate { padding-bottom: 8px; }
+}
+/* On a desktop the pane is far wider than an issue needs: keep the flyer at Fold size and the bar right under it. */
+@media (min-width: 1100px) {
+  .pane.detail .issue-detail { flex: none; width: 100%; max-width: 620px; --detail-cover: 150px; }
+  .pane.detail .toner { position: static; margin: 4px 0 0; }
+}
+
 /* An issue on its way onto the pile (motion.ts). */
 .cv.flying { position: fixed; z-index: 45; margin: 0; pointer-events: none; }
 

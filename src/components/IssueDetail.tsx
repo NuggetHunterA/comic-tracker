@@ -15,17 +15,36 @@ import { EVENT_COLORS, defaultShort, eventHex } from "../lib/events";
 import { openEvent } from "../lib/nav";
 
 
-type Props = { issueId: number; onClose?: () => void };
+type Props = { issueId: number; onClose?: () => void; fromRun?: boolean };
 
 /** A fresh detail per issue, so a moment just played for one issue does not replay on the next. */
 export function IssueDetail(props: Props) {
   return <IssueDetailBody key={props.issueId} {...props} />;
 }
 
-function IssueDetailBody({ issueId, onClose }: Props) {
+const ICON = {
+  check: <path d="M4 12.5l5 5L20 6.5" />,
+  out: <path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6" />,
+  next: <path d="M4 12h14M13 6l6 6-6 6" />,
+  tonight: <><circle cx="12" cy="12" r="7" /><circle cx="12" cy="12" r="2" /></>,
+  x: <path d="M6 6l12 12M18 6L6 18" />,
+  back: <path d="M9 7L4 12l5 5M4 12h11a5 5 0 0 1 0 10h-3" />,
+  pin: <><circle cx="12" cy="8" r="4" /><path d="M12 12v9" /></>,
+  pile: <path d="M4 8h16M4 13h16M4 18h16" />,
+  dots: <><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></>,
+};
+type Slot = { icon: keyof typeof ICON; label: string; title: string; onClick?: () => void; href?: string };
+type More = { label: string; onClick: () => void; warn?: boolean };
+
+function Icon({ name }: { name: keyof typeof ICON }) {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="square" aria-hidden="true">{ICON[name]}</svg>;
+}
+
+function IssueDetailBody({ issueId, onClose, fromRun }: Props) {
   const { data, today, plan } = useStore();
   const { run, busy, error } = useRun();
   const [pickFormat, setPickFormat] = useState<Format>("infinite");
+  const [moreOpen, setMoreOpen] = useState(false);
   const head = useRef<HTMLDivElement>(null);
   // What was just done here, so only that plays its moment (not every time the detail opens).
   const [stamped, setStamped] = useState<number | null>(null);
@@ -52,17 +71,76 @@ function IssueDetailBody({ issueId, onClose }: Props) {
     if (cv) void flyToPile(cv);
     return run(() => actions.addIssue(issueId, "pile", isDC ? pickFormat : "print"));
   };
+  const markRead = async () => {
+    // Tear the cover off, then tape it back on marked as read.
+    const cv = cover();
+    const rip = cv ? ripCover(cv) : null;
+    await run(() => Promise.all([actions.markRead(issueId, today), new Promise((done) => window.setTimeout(done, RIP_MS))]));
+    rip?.restore();
+  };
+  const readEarlier = () => run(() => actions.markReadEarlier(issueId));
+  const toWishlist = () => { setPinned(true); run(() => actions.addIssue(issueId, "wishlist", null)); };
+  const follow = async () => { if (await run(() => actions.follow(issue.series_id, isDC ? "infinite" : "print"))) setJustFollowed(true); };
+
+  // The toner bar: one pink main action, up to two slots, then Mehr. Everything else waits under Mehr.
+  const fresh = !ui || ui.status === "dismissed";
+  const picking = fresh || ui?.status === "wishlist";
+  const hasRange = issue.sort_number !== null && (picking || ui?.status === "read");
+  let go: { label: string; onClick: () => void } | null = null;
+  let wait: string | null = null;
+  const cand: Slot[] = [];
+  const more: More[] = [];
+  if (fresh) {
+    // In a series' run, an issue that is already out was most likely read long ago.
+    const oldInRun = !!fromRun && !!issue.store_date && issue.store_date <= today;
+    go = oldInRun ? { label: "Schon gelesen", onClick: readEarlier } : { label: "Einplanen", onClick: toPile };
+    cand.push(oldInRun ? { icon: "pile", label: "Einplanen", title: "Einplanen", onClick: toPile } : { icon: "check", label: "Gelesen", title: "Schon gelesen", onClick: readEarlier });
+    cand.push({ icon: "pin", label: "Wunsch", title: "Auf die Wunschliste", onClick: toWishlist });
+    if (!followed) more.push({ label: "Serie folgen", onClick: follow });
+  } else if (ui.status === "wishlist") {
+    go = { label: "Auf den Stapel", onClick: toPile };
+    cand.push({ icon: "check", label: "Gelesen", title: "Schon gelesen", onClick: readEarlier });
+    cand.push({ icon: "x", label: "Streichen", title: "Von der Liste", onClick: () => run(async () => { await actions.dismissIssue(issueId); onClose?.(); }) });
+  } else if (ui.status !== "read") {
+    if (readable) go = { label: "Gelesen", onClick: markRead };
+    else if (ui.format !== "infinite" && !ui.bought_on) go = { label: "Gekauft", onClick: () => run(() => actions.setBought(issueId, today)) };
+    else if (from) wait = `AB ${shortDate(from)}`;
+    if (ui.format === "infinite" && readable) cand.push({ icon: "out", label: "Infinite", title: "In Infinite öffnen", href: infiniteHref });
+    if (readable && !ui.skip_plan) {
+      const tomorrow = { icon: "next" as const, label: "Morgen", title: "Auf morgen", onClick: () => run(() => actions.pin(issueId, addDays(today, 1), 1)) };
+      if (isTonight(plan, today, issueId)) cand.push(tomorrow);
+      else {
+        cand.push({ icon: "tonight", label: "Heute", title: "Heute lesen", onClick: () => run(() => actions.pin(issueId, today, 1)) });
+        more.push({ label: "Auf morgen", onClick: tomorrow.onClick! });
+      }
+    }
+    cand.push(ui.skip_plan
+      ? { icon: "back", label: "Einplanen", title: "Wieder einplanen", onClick: () => run(() => actions.skipPlan(issueId, false)) }
+      : { icon: "x", label: "Aus Plan", title: "Aus dem Plan", onClick: () => run(() => actions.skipPlan(issueId, true)) });
+  }
+  const slots = cand.slice(0, 2);
+  // What does not fit in the bar goes first under Mehr.
+  more.unshift(...cand.slice(2).map((c) => ({ label: c.title, onClick: c.onClick! })));
+  if (ui?.status === "read") more.push({ label: "Doch nicht gelesen", warn: true, onClick: () => run(() => (!ui.format && !ui.read_on ? actions.removeIssue(issueId) : actions.markUnread(issueId))) });
+  const onPile = !!ui && ui.status !== "read" && ui.status !== "dismissed" && ui.status !== "wishlist";
+  if (onPile && ui.format !== "infinite" && ui.bought_on) more.push({ label: "Doch nicht gekauft", onClick: () => run(() => actions.setBought(issueId, null)) });
+  if (onPile) more.push({ label: "Vom Stapel entfernen", warn: true, onClick: () => run(async () => { await actions.removeIssue(issueId); onClose?.(); }) });
+  // Undoing and removing come last, after the everyday changes.
+  const moreRow = (m: More) => (
+    <button key={m.label} type="button" className={`mrow ${m.warn ? "warn" : ""}`} disabled={busy} onClick={m.onClick}><span>{m.label}</span><Chevron /></button>
+  );
+  const moreCount = more.length + (hasRange ? 2 : 0) + (onPile && isDC ? 1 : 0) + (onPile || ui?.status === "wishlist" ? 1 : 0);
 
   return (
-    <div className="issue-detail" style={{ display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
-      <div ref={head} style={{ display: "flex", gap: 22, alignItems: "flex-start" }}>
-        <Cover issue={issue} readable={!ui || readable || ui.status === "read"} showNumber={false} tape={ui?.status === "read" ? "GELESEN" : true} style={{ width: 126, flex: "none", transform: "rotate(-1.5deg)" }}>
+    <div className="issue-detail" style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1 }}>
+      <div ref={head} style={{ display: "flex", gap: 18, alignItems: "flex-start" }}>
+        <Cover issue={issue} readable={!ui || readable || ui.status === "read"} showNumber={false} tape={ui?.status === "read" ? "GELESEN" : true} style={{ width: "var(--detail-cover, 96px)", flex: "none", transform: "rotate(-1.5deg)" }}>
           {ui?.status === "read" && ui.rating && <span key={ui.rating} className={`stamp grade ${stamped === ui.rating ? "hit" : ""}`}>{ui.rating}<b>/10</b></span>}
           {ui?.status === "wishlist" && <span className={`pinned ${pinned ? "swing" : ""}`}><span className="pin" /><span className="lbl">WUNSCH</span></span>}
         </Cover>
-        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
-          <h2 style={{ fontSize: 30, lineHeight: 1 }}>{justFollowed && followed ? <span className="marker fresh">{title}</span> : title}</h2>
-          <div style={{ display: "flex", flexDirection: "column", marginTop: 6 }}>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+          <h2 style={{ fontSize: 26, lineHeight: 1 }}>{justFollowed && followed ? <span className="marker fresh">{title}</span> : title}</h2>
+          <div className="facts">
             {issue.store_date && (
               <div className="kv"><span>ERSCHEINT</span><span>{dateLabel(issue.store_date, today)}</span></div>
             )}
@@ -79,113 +157,72 @@ function IssueDetailBody({ issueId, onClose }: Props) {
         </div>
       </div>
 
-      {ui?.status === "read" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <span style={{ fontWeight: 700, fontSize: 15 }}>Bewertung</span>
-          <div role="radiogroup" aria-label="Bewertung von 1 bis 10" className="ratings">
-            {Array.from({ length: 10 }, (_, k) => k + 1).map((n) => (
-              <button key={n} type="button" role="radio" aria-checked={ui.rating === n} className={`rt ${ui.rating === n ? "on" : ""}`} disabled={busy}
-                onClick={(e) => {
-                  if (ui.rating !== n) {
-                    pressStamp(e.currentTarget);
-                    setStamped(n);
-                    thud(cover(), 230);
-                  }
-                  run(() => actions.rate(issueId, ui.rating === n ? null : n));
-                }}>{n}</button>
-            ))}
-          </div>
-        </div>
+      {picking && isDC && (
+        <div className="readas"><span>LESEN ALS</span><FormatChips value={pickFormat} onChange={setPickFormat} /></div>
       )}
 
-      {(!ui || ui.status === "wishlist" || ui.status === "dismissed") && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {isDC && (
+      {ui?.status === "read" && (
+        <button type="button" className="morehead" aria-expanded={moreOpen} onClick={() => setMoreOpen(!moreOpen)}>
+          <span>Mehr</span><span className="n">{moreCount}</span><Chevron open={moreOpen} />
+        </button>
+      )}
+
+      {moreOpen && (
+        <div className="morelist" role="group" aria-label="Mehr">
+          {more.filter((m) => !m.warn).map(moreRow)}
+          {onPile && isDC && (
+            <div className="mrow"><span>Format</span><FormatChips value={ui.format ?? "print"} onChange={(f) => run(() => actions.setFormat(issueId, f))} /></div>
+          )}
+          {(onPile || ui?.status === "wishlist") && <div className="mrow pick"><EventPick issue={issue} isDC={isDC} /></div>}
+          {hasRange && (
             <>
-              <span style={{ fontWeight: 700, fontSize: 15 }}>Wie willst du es lesen?</span>
-              <FormatChips value={pickFormat} onChange={setPickFormat} />
+              <RangeAction issue={issue} mode="read" />
+              <RangeAction issue={issue} mode="pile" format={followedFormat ?? (isDC ? "infinite" : "print")} />
             </>
           )}
-          {isDC && pickFormat === "infinite" && issue.store_date && addDays(issue.store_date, delay) > today && (
-            <span className="mut" style={{ fontSize: 14 }}>Kommt in den Stapel und wird am <span className="stk">{shortDate(addDays(issue.store_date, delay))}</span> lesbar.</span>
-          )}
-          {isDC && pickFormat === "infinite" && issue.store_date && addDays(issue.store_date, delay) <= today && (
-            <span className="mut" style={{ fontSize: 14 }}>Kommt in den Stapel und ist sofort lesbar.</span>
-          )}
-          {(!isDC || pickFormat !== "infinite") && <span className="mut" style={{ fontSize: 14 }}>Kommt in den Stapel. Lesbar, sobald du es als gekauft markierst.</span>}
+          {more.filter((m) => m.warn).map(moreRow)}
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: "auto" }}>
-        {!ui || ui.status === "dismissed" ? (
-          <>
-            <button type="button" className="btn solid" style={{ flex: "1 1 100%" }} disabled={busy} onClick={() => run(() => actions.markReadEarlier(issueId))}>Schon gelesen</button>
-            <button type="button" className="btn" disabled={busy} onClick={toPile}>Einplanen</button>
-            <button type="button" className="btn" disabled={busy} onClick={() => { setPinned(true); run(() => actions.addIssue(issueId, "wishlist", null)); }}>Auf die Wunschliste</button>
-            {!followed && <button type="button" className="btn" disabled={busy} onClick={async () => { if (await run(() => actions.follow(issue.series_id, isDC ? "infinite" : "print"))) setJustFollowed(true); }}>Serie folgen</button>}
-          </>
-        ) : ui.status === "wishlist" ? (
-          <>
-            <button type="button" className="btn solid" style={{ flex: 1 }} disabled={busy} onClick={toPile}>Auf den Stapel</button>
-            <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.markReadEarlier(issueId))}>Schon gelesen</button>
-            <button type="button" className="btn" disabled={busy} onClick={() => run(async () => { await actions.dismissIssue(issueId); onClose?.(); })}>Von der Liste</button>
-          </>
-        ) : ui.status === "read" ? (
-          // Read earlier (no format, no date) goes back to nothing, not onto the pile.
-          <button type="button" className="btn" disabled={busy}
-            onClick={() => run(() => (!ui.format && !ui.read_on ? actions.removeIssue(issueId) : actions.markUnread(issueId)))}>Doch nicht gelesen</button>
-        ) : (
-          <>
-            {readable && <button type="button" className="btn solid" style={{ flex: 1 }} disabled={busy} onClick={async () => {
-              // Tear the cover off, then tape it back on marked as read.
-              const cv = head.current?.querySelector<HTMLElement>(".cv");
-              const rip = cv ? ripCover(cv) : null;
-              await run(() => Promise.all([actions.markRead(issueId, today), new Promise((done) => window.setTimeout(done, RIP_MS))]));
-              rip?.restore();
-            }}>Gelesen</button>}
-            {ui.format !== "infinite" && !ui.bought_on && (
-              <button type="button" className="btn solid" style={{ flex: 1 }} disabled={busy} onClick={() => run(() => actions.setBought(issueId, today))}>Gekauft</button>
-            )}
-            {readable && !ui.skip_plan && (
-              <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.pin(issueId, addDays(today, 1), 1))}>Auf morgen</button>
-            )}
-            {readable && !ui.skip_plan && !isTonight(plan, today, issueId) && (
-              <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.pin(issueId, today, 1))}>Heute lesen</button>
-            )}
-            {ui.skip_plan ? (
-              <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.skipPlan(issueId, false))}>Wieder einplanen</button>
-            ) : (
-              <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.skipPlan(issueId, true))}>Aus dem Plan</button>
-            )}
-            {ui.format === "infinite" && readable && (
-              <a className="btn" href={infiniteHref} target={infiniteHref.startsWith("intent:") ? undefined : "_blank"} rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }}>In Infinite öffnen</a>
-            )}
-          </>
-        )}
-      </div>
-
-      {issue.sort_number !== null && (!ui || ui.status === "wishlist" || ui.status === "dismissed" || ui.status === "read") && (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 10 }}>
-          <RangeAction issue={issue} mode="read" />
-          <RangeAction issue={issue} mode="pile" format={followedFormat ?? (isDC ? "infinite" : "print")} />
-        </div>
-      )}
-
-      {ui && ui.status !== "read" && ui.status !== "dismissed" && (
-        <details>
-          <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 14, minHeight: 32 }}>{isDC ? "Format oder Stapel ändern" : "Stapel ändern"}</summary>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingTop: 8 }}>
-            <FormatChips value={ui.format ?? "print"} allowInfinite={isDC} onChange={(f) => run(() => actions.setFormat(issueId, f))} />
-            {ui.format !== "infinite" && ui.bought_on && (
-              <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.setBought(issueId, null))} style={{ alignSelf: "flex-start" }}>Doch nicht gekauft</button>
-            )}
-            <EventPick issue={issue} isDC={isDC} />
-            <button type="button" className="btn" disabled={busy} style={{ alignSelf: "flex-start" }} onClick={() => run(async () => { await actions.removeIssue(issueId); onClose?.(); })}>Vom Stapel entfernen</button>
-          </div>
-        </details>
-      )}
       {error && <p role="alert" className="stk" style={{ whiteSpace: "normal" }}>{error}</p>}
+
+      {ui?.status === "read" ? (
+        <div role="radiogroup" aria-label="Bewertung von 1 bis 10" className="toner rate">
+          {Array.from({ length: 10 }, (_, k) => k + 1).map((n) => (
+            <button key={n} type="button" role="radio" aria-checked={ui.rating === n} className={ui.rating === n ? "on" : ""} disabled={busy}
+              onClick={(e) => {
+                if (ui.rating !== n) {
+                  pressStamp(e.currentTarget);
+                  setStamped(n);
+                  thud(cover(), 230);
+                }
+                run(() => actions.rate(issueId, ui.rating === n ? null : n));
+              }}>{n}</button>
+          ))}
+        </div>
+      ) : (
+        <div className="toner">
+          {go ? <button type="button" className="go" disabled={busy} onClick={go.onClick}>{go.label}</button>
+            : wait ? <span className="go wait">{wait}</span> : null}
+          {slots.map((sl) => sl.href ? (
+            <a key={sl.label} className="slot" href={sl.href} title={sl.title} target={sl.href.startsWith("intent:") ? undefined : "_blank"} rel="noreferrer"><Icon name={sl.icon} />{sl.label}</a>
+          ) : (
+            <button key={sl.label} type="button" className="slot" title={sl.title} disabled={busy} onClick={sl.onClick}><Icon name={sl.icon} />{sl.label}</button>
+          ))}
+          {moreCount > 0 && (
+            <button type="button" className={`slot ${moreOpen ? "on" : ""}`} aria-expanded={moreOpen} onClick={() => setMoreOpen(!moreOpen)}><Icon name="dots" />Mehr</button>
+          )}
+        </div>
+      )}
     </div>
+  );
+}
+
+function Chevron({ open }: { open?: boolean }) {
+  return (
+    <svg className="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" aria-hidden="true">
+      <path d={open === undefined ? "M9 5l7 7-7 7" : open ? "M5 15l7-7 7 7" : "M5 9l7 7 7-7"} />
+    </svg>
   );
 }
 
@@ -297,13 +334,13 @@ function RangeAction({ issue, mode, format }: { issue: Issue; mode: "read" | "pi
 
   if (!open) {
     return (
-      <button type="button" className="btn dashed" aria-expanded="false" onClick={prepare}>{label}</button>
+      <button type="button" className="mrow" aria-expanded="false" onClick={prepare}><span>{label}</span><Chevron /></button>
     );
   }
   const count = todo ? (todo.ids.length === 1 ? "1 Heft" : `${todo.ids.length} Hefte`) : "";
   const span = todo ? (mode === "read" ? `#${todo.end} bis #${issue.number}` : `#${issue.number} bis #${todo.end}`) : "";
   return (
-    <div className="confirm" role="group" aria-label={label} style={{ alignSelf: "stretch" }}>
+    <div className="confirm" role="group" aria-label={label}>
       {failed ? <p>{failed}</p> : !todo ? <p>Zähle die Hefte …</p> : todo.ids.length === 0 ? (
         <p>{mode === "read" ? `Bis #${issue.number}` : `Ab #${issue.number}`} ist schon alles gelesen oder liegt auf dem Stapel.</p>
       ) : mode === "read" ? (

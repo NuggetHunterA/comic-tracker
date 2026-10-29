@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { metron, supabase } from "../lib/supabase";
+import { infinite, metron, supabase } from "../lib/supabase";
+import { forgetInfiniteLinks } from "../lib/infiniteLink";
 import { actions, useStore } from "../lib/store";
 import { shortDate } from "../lib/dates";
 import { FORMAT_LABEL, issueTitle, seriesLong } from "../lib/labels";
@@ -177,10 +178,52 @@ export function SeriesDetail({ seriesId, onSelect, onGone }: { seriesId: number;
             <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.setPaused(seriesId, !f.paused))}>{f.paused ? "Fortsetzen" : "Pausieren"}</button>
             <button type="button" className="btn" disabled={busy} onClick={() => run(async () => { await actions.unfollow(seriesId); onGone(); })}>Nicht mehr folgen</button>
           </div>
+          {isDC && <InfiniteSeriesLink seriesId={seriesId} />}
         </div>
       )}
       {error && <p role="alert" className="stk" style={{ whiteSpace: "normal" }}>{error}</p>}
     </>
+  );
+}
+
+/** The series page on Infinite, pasted by hand when the lookup cannot find it. */
+function InfiniteSeriesLink({ seriesId }: { seriesId: number }) {
+  const { run, busy, error } = useRun();
+  const [saved, setSaved] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  useEffect(() => {
+    let live = true;
+    supabase.from("series").select("infinite_url").eq("id", seriesId).maybeSingle()
+      .then(({ data }) => { if (live) setSaved((data as { infinite_url?: string | null } | null)?.infinite_url ?? null); });
+    return () => { live = false; };
+  }, [seriesId]);
+
+  const save = (url: string | null) => run(async () => {
+    const r = await infinite<{ url: string | null }>({ action: "set-series", series_id: seriesId, url });
+    forgetInfiniteLinks();
+    setSaved(r.url);
+    setDraft("");
+  });
+
+  return (
+    <details style={{ marginTop: 6 }}>
+      <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 14, minHeight: 32 }}>Serie in Infinite{saved ? " · verknüpft" : ""}</summary>
+      <form noValidate style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 8 }} onSubmit={(e) => { e.preventDefault(); if (draft.trim()) save(draft); }}>
+        <span className="mut" style={{ fontSize: 14 }}>
+          Öffnet „In Infinite öffnen“ nur die Suche? Teile die Serie in der Infinite-App, kopiere den Link und füge ihn hier ein.
+        </span>
+        <label className="field">
+          Link der Serie
+          <input type="url" inputMode="url" value={draft} onChange={(e) => setDraft(e.target.value)}
+            placeholder={saved ?? "dcuniverseinfinite.com/comics/series/…"} autoComplete="off" />
+        </label>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button type="submit" className="btn solid" disabled={busy || !draft.trim()}>Link speichern</button>
+          {saved && <button type="button" className="btn" disabled={busy} onClick={() => save(null)}>Link entfernen</button>}
+        </div>
+        {error && <p role="alert" className="stk" style={{ whiteSpace: "normal" }}>{error}</p>}
+      </form>
+    </details>
   );
 }
 

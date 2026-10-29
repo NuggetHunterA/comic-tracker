@@ -9,6 +9,9 @@
   --pink: #ff2e88;
   --tape: rgba(236, 226, 190, 0.88);
   --copy: #c9c8c2;
+  --card: #b78f5e;
+  --card-dk: #8f6b40;
+  --card-hi: #cfa874;
   --display: "Anton", "Impact", sans-serif;
   --ui: "Archivo Narrow", "Arial Narrow", sans-serif;
   --mono: "Courier Prime", "Courier New", monospace;
@@ -311,3 +314,33 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-weight: 700;
 }
 .marker.fresh { animation: marker 420ms 120ms cubic-bezier(0.6, 0, 0.2, 1) backwards; }
 @keyframes marker { from { background-size: 0% 72%; } }
+
+/* ---------- Neu auf Infinite: the box of the day (InfiniteDrop) ---------- */
+.drop { position: fixed; inset: 0; z-index: 50; overflow: hidden; }
+.drop-veil { position: absolute; inset: 0; background: rgba(17, 17, 17, 0.86); }
+.drop-body {
+  position: relative; height: 100%; max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px;
+  padding: calc(28px + env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom)); color: var(--paper); overflow-y: auto;
+}
+.drop-head { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.drop-head .stk { transform: rotate(-1deg); }
+.drop-head h2 { font-size: clamp(48px, 14vw, 64px); line-height: 0.92; }
+.drop-row { display: flex; gap: 14px; justify-content: center; align-items: flex-start; padding-top: 12px; }
+.drop-row > * { width: min(30%, 140px); }
+.drop-row > :nth-child(2) { margin-top: 8px; }
+.drop-row .cv { border-color: var(--ink); }
+.drop-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 16px; }
+.drop-list .w { font-family: var(--mono); font-weight: 700; font-size: 11px; background: var(--paper); color: var(--ink); padding: 0 4px; margin-left: 8px; vertical-align: 1px; }
+.drop-go { margin-top: auto; width: 100%; flex: none; }
+.drop-box { position: absolute; left: 50%; bottom: 96px; width: 240px; height: 130px; margin-left: -120px; pointer-events: none; }
+.drop-box .front {
+  position: absolute; inset: 0; background: var(--card); border: 2px solid var(--card-dk);
+  background-image: repeating-linear-gradient(90deg, transparent 0 18px, rgba(0, 0, 0, 0.035) 18px 19px);
+}
+.drop-box .hole { position: absolute; left: 50%; top: 20px; width: 58px; height: 15px; margin-left: -29px; border-radius: 8px; background: var(--card-dk); }
+.drop-box .front .lbl {
+  position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%) rotate(-2deg); background: var(--paper-hi); border: 2px solid var(--ink);
+  color: var(--ink); font-family: var(--display); font-size: 16px; padding: 3px 8px 2px; white-space: nowrap; text-transform: uppercase;
+}
+.drop-box .front .lbl b { font-family: var(--mono); font-size: 12px; margin-left: 5px; color: var(--pink); background: var(--ink); padding: 0 3px; }
+.drop-box .lid { position: absolute; left: -7px; right: -7px; top: -28px; height: 30px; background: var(--card-hi); border: 2px solid var(--card-dk); transform-origin: 100% 100%; }

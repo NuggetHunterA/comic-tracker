@@ -1,6 +1,6 @@
 import type { Format, Issue, Series } from "./types";
 
-export const FORMAT_LABEL: Record<Format, string> = { print: "Print", infinite: "Infinite", digital: "Digital" };
+export const FORMAT_LABEL: Record<Format, string> = { print: "Print", infinite: "Infinite" };
 
 export function seriesTitle(s: Series | undefined): string {
   if (!s) return "Unbekannte Serie";

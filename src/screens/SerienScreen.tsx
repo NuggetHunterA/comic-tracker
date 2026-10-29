@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { metron, supabase } from "../lib/supabase";
 import { actions, useStore } from "../lib/store";
 import { shortDate } from "../lib/dates";
-import { issueTitle, seriesLong } from "../lib/labels";
-import type { Issue, Series } from "../lib/types";
+import { FORMAT_LABEL, issueTitle, seriesLong } from "../lib/labels";
+import type { Format, Issue, Series } from "../lib/types";
 import { Cover } from "../components/Cover";
 import { FormatChips } from "../components/FormatChips";
 import { SeriesSearch, type FoundSeries } from "../components/SeriesSearch";
@@ -83,7 +83,7 @@ export function SerienList({ tab, setTab, sel, onSelect }: {
                     <strong style={{ fontSize: 16 }}>{seriesLong(s)}</strong>
                     <span className="d mut" style={{ fontSize: 12 }}>{f.paused ? "PAUSIERT" : `${openCount(f.series_id)} OFFEN${ended ? " · ENDET" : ""}`}</span>
                   </span>
-                  <span className="tag">{f.default_format === "infinite" ? "Infinite" : f.default_format === "print" ? "Print" : "Digital"}</span>
+                  <span className="tag">{FORMAT_LABEL[f.default_format]}</span>
                 </button>
               );
             })}
@@ -187,7 +187,7 @@ export function SeriesDetail({ seriesId, onSelect, onGone }: { seriesId: number;
 export function AddSeries({ onDone }: { onDone: (seriesId: number) => void }) {
   const { reload } = useStore();
   const [pick, setPick] = useState<FoundSeries | null>(null);
-  const [format, setFormat] = useState<"infinite" | "print" | "digital">("infinite");
+  const [format, setFormat] = useState<Format>("infinite");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const isDC = useMemo(() => (pick?.publisher ?? "").startsWith("DC"), [pick]);
@@ -198,7 +198,7 @@ export function AddSeries({ onDone }: { onDone: (seriesId: number) => void }) {
     setMsg("Hole die Serie von Metron …");
     try {
       await metron({ action: "sync-series", series_id: pick.id });
-      await actions.follow(pick.id, isDC ? format : format === "infinite" ? "print" : format);
+      await actions.follow(pick.id, isDC ? format : "print");
       await reload();
       onDone(pick.id);
     } catch (e) {
@@ -215,8 +215,12 @@ export function AddSeries({ onDone }: { onDone: (seriesId: number) => void }) {
       <SeriesSearch picked={pick?.id} onPick={(s) => { setPick(s); setFormat((s.publisher ?? "").startsWith("DC") ? "infinite" : "print"); }} />
       {pick && (
         <>
-          <span style={{ fontWeight: 700, fontSize: 15 }}>Wie liest du {pick.name}?</span>
-          <FormatChips value={format} onChange={setFormat} allowInfinite={isDC} />
+          {isDC && (
+            <>
+              <span style={{ fontWeight: 700, fontSize: 15 }}>Wie liest du {pick.name}?</span>
+              <FormatChips value={format} onChange={setFormat} />
+            </>
+          )}
           <button type="button" className="btn solid" disabled={busy} onClick={follow}>{busy ? "Folge …" : "Folgen"}</button>
         </>
       )}

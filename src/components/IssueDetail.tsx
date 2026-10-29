@@ -65,12 +65,16 @@ export function IssueDetail({ issueId, onClose }: { issueId: number; onClose?: (
 
       {(!ui || ui.status === "wishlist" || ui.status === "dismissed") && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <span style={{ fontWeight: 700, fontSize: 15 }}>Wie willst du es lesen?</span>
-          <FormatChips value={pickFormat} onChange={setPickFormat} allowInfinite={isDC} />
-          {pickFormat === "infinite" && issue.store_date && (
+          {isDC && (
+            <>
+              <span style={{ fontWeight: 700, fontSize: 15 }}>Wie willst du es lesen?</span>
+              <FormatChips value={pickFormat} onChange={setPickFormat} />
+            </>
+          )}
+          {isDC && pickFormat === "infinite" && issue.store_date && (
             <span className="mut" style={{ fontSize: 14 }}>Kommt in den Stapel und wird am <span className="stk">{shortDate(addDays(issue.store_date, delay))}</span> lesbar.</span>
           )}
-          {pickFormat !== "infinite" && <span className="mut" style={{ fontSize: 14 }}>Kommt in den Stapel. Lesbar, sobald du es als gekauft markierst.</span>}
+          {(!isDC || pickFormat !== "infinite") && <span className="mut" style={{ fontSize: 14 }}>Kommt in den Stapel. Lesbar, sobald du es als gekauft markierst.</span>}
         </div>
       )}
 
@@ -78,12 +82,12 @@ export function IssueDetail({ issueId, onClose }: { issueId: number; onClose?: (
         {!ui || ui.status === "dismissed" ? (
           <>
             {!followed && <button type="button" className="btn solid" disabled={busy} onClick={() => run(() => actions.follow(issue.series_id, isDC ? "infinite" : "print"))}>Serie folgen</button>}
-            <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.addIssue(issueId, "pile", isDC ? pickFormat : pickFormat === "infinite" ? "print" : pickFormat))}>Nur dieses Heft einplanen</button>
+            <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.addIssue(issueId, "pile", isDC ? pickFormat : "print"))}>Nur dieses Heft einplanen</button>
             <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.addIssue(issueId, "wishlist", null))}>Auf die Wunschliste</button>
           </>
         ) : ui.status === "wishlist" ? (
           <>
-            <button type="button" className="btn solid" style={{ flex: 1 }} disabled={busy} onClick={() => run(() => actions.addIssue(issueId, "pile", pickFormat))}>Auf den Stapel</button>
+            <button type="button" className="btn solid" style={{ flex: 1 }} disabled={busy} onClick={() => run(() => actions.addIssue(issueId, "pile", isDC ? pickFormat : "print"))}>Auf den Stapel</button>
             <button type="button" className="btn" disabled={busy} onClick={() => run(async () => { await actions.dismissIssue(issueId); onClose?.(); })}>Von der Liste</button>
           </>
         ) : ui.status === "read" ? (
@@ -120,7 +124,7 @@ export function IssueDetail({ issueId, onClose }: { issueId: number; onClose?: (
 
       {ui && ui.status !== "read" && ui.status !== "dismissed" && (
         <details>
-          <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 14, minHeight: 32 }}>Format oder Stapel ändern</summary>
+          <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 14, minHeight: 32 }}>{isDC ? "Format oder Stapel ändern" : "Stapel ändern"}</summary>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingTop: 8 }}>
             <FormatChips value={ui.format ?? "print"} allowInfinite={isDC} onChange={(f) => run(() => actions.setFormat(issueId, f))} />
             {ui.format !== "infinite" && ui.bought_on && (

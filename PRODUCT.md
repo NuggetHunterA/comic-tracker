@@ -26,13 +26,13 @@ Unlike pull-list apps (League of Comic Geeks etc.), it plans the reading itself:
 
 - Data from the Metron comic database API: series, issue number, store date, main cover image URL.
 - DC Universe Infinite Ultra subscription (print + 30 days). No Marvel or Image subscription; those are bought.
-- Print issues do not arrive in German shops on release day; Adrian marks print and digital purchases as bought by hand.
+- Print issues do not arrive in German shops on release day; Adrian marks print purchases as bought by hand.
 - Reads every evening; unread issues roll over to the next evening.
 
 ## Capabilities and Constraints
 
 - Areas: Plan (today + next 14 evenings), Stapel (pile), Katalog (monthly releases, tabs DC and Marvel + Image, cover grid), Meine Serien (followed series + wishlist).
-- Issue states: Wunschliste, Erwartet, Stapel, Gelesen. Formats: Print, Infinite (Ultra), digital purchase.
+- Issue states: Wunschliste, Erwartet, Stapel, Gelesen. Formats: Print and Infinite (Ultra). Adrian reads in the subscription or buys print, never digital single issues.
 - Plan rules: only readable issues; series in number order; old pile first, then new issues; read a story arc in one go (Metron story arcs; crossover arcs in arc order), switch series only after an arc ends; without arc data, read blocks of several issues per series; max 3 per evening; manual moves are pinned.
 - Rating on read: 1 to 10, whole steps.
 - Annuals and specials of followed series go to the wishlist only. Relaunches are suggested, never auto-followed.

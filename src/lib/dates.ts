@@ -42,6 +42,11 @@ export function monthLabel(iso: string, withYear = false): string {
   return withYear ? `${MONTHS[d.getMonth()]} ${d.getFullYear()}` : MONTHS[d.getMonth()];
 }
 
+/** Monday of the week the day falls in; release weeks group by it. */
+export function weekStart(iso: string): string {
+  return addDays(iso, -((fromIso(iso).getDay() + 6) % 7));
+}
+
 export function monthStart(iso: string, offset = 0): string {
   const d = fromIso(iso);
   return toIso(new Date(d.getFullYear(), d.getMonth() + offset, 1));

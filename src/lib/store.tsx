@@ -3,7 +3,7 @@ import { buildPlan, readableFrom, stalledSeries, type Evening, type PlanIssue } 
 import { supabase } from "./supabase";
 import { todayIso } from "./dates";
 import { eventOrder, insertAt } from "./events";
-import type { EventIssue, EventRow, Followed, Format, Issue, PlanPin, Series, Settings, UserIssue } from "./types";
+import type { EventIssue, EventRow, Followed, Format, Issue, PlanPin, Series, SeriesRank, Settings, UserIssue } from "./types";
 
 export interface Item {
   issue: Issue;
@@ -24,6 +24,7 @@ export interface Data {
   events: EventRow[];
   eventIssues: EventIssue[];
   pins: PlanPin[];
+  seriesOrder: SeriesRank[];
 }
 
 /** An event with its issues in reading order. */
@@ -73,7 +74,7 @@ async function inChunks<T>(ids: number[], fetch: (chunk: number[]) => PromiseLik
 }
 
 async function load(): Promise<Data> {
-  const [settings, followed, wishlist, dismissed, userIssues, pins, events, eventIssues] = await Promise.all([
+  const [settings, followed, wishlist, dismissed, userIssues, pins, events, eventIssues, seriesOrder] = await Promise.all([
     supabase.from("settings").select("infinite_delay_days, max_per_evening").maybeSingle(),
     supabase.from("followed_series").select("series_id, default_format, paused, created_at"),
     supabase.from("wishlist_series").select("series_id"),
@@ -82,8 +83,9 @@ async function load(): Promise<Data> {
     supabase.from("plan_entries").select("issue_id, evening, slot, pinned"),
     supabase.from("events").select("id, name, short, color, manual_order, created_at").order("created_at"),
     supabase.from("event_issues").select("event_id, issue_id, position"),
+    supabase.from("series_order").select("series_id, position, whole").order("position"),
   ]);
-  for (const r of [settings, followed, wishlist, dismissed, userIssues, pins, events, eventIssues]) if (r.error) throw r.error;
+  for (const r of [settings, followed, wishlist, dismissed, userIssues, pins, events, eventIssues, seriesOrder]) if (r.error) throw r.error;
 
   const uis = (userIssues.data ?? []) as UserIssue[];
   const links = (eventIssues.data ?? []) as EventIssue[];
@@ -114,6 +116,7 @@ async function load(): Promise<Data> {
     events: (events.data ?? []) as EventRow[],
     eventIssues: links,
     pins: (pins.data ?? []) as PlanPin[],
+    seriesOrder: (seriesOrder.data ?? []) as SeriesRank[],
   };
 }
 
@@ -206,8 +209,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const pins = data.pins
       .filter((p) => p.pinned && openIds.has(p.issue_id))
       .map((p) => ({ issueId: p.issue_id, evening: p.evening, slot: p.slot }));
+    const order = {
+      ranked: data.seriesOrder.map((r) => r.series_id),
+      whole: new Set(data.seriesOrder.filter((r) => r.whole).map((r) => r.series_id)),
+    };
     return {
-      plan: buildPlan({ issues: planIssues, pins, today, maxPerEvening: data.settings.max_per_evening, startedEvents }),
+      plan: buildPlan({ issues: planIssues, pins, today, maxPerEvening: data.settings.max_per_evening, startedEvents, order }),
       stalled: stalledSeries(planIssues).map((s) => ({ issueId: s.issue.id, behind: s.behind })),
     };
   }, [data, items, today, events, eventOf]);
@@ -332,5 +339,12 @@ export const actions = {
     await check(supabase.from("event_issues").upsert(issueIds.map((id, k) => ({ event_id: eventId, issue_id: id, position: k + 1 })), { onConflict: "user_id,issue_id" }));
     await check(supabase.from("events").update({ manual_order: true }).eq("id", eventId));
   },
+  /** Keeps the series in this order; the first `whole` of them are read to the end in one go. */
+  orderSeries: async (seriesIds: number[], whole: number) => {
+    await check(supabase.from("series_order").delete().gte("position", 0));
+    await check(supabase.from("series_order").insert(seriesIds.map((id, k) => ({ series_id: id, position: k + 1, whole: k < whole }))));
+  },
+  /** Back to date order: the plan forgets the ranking. */
+  sortSeriesByDate: () => check(supabase.from("series_order").delete().gte("position", 0)),
   sortEventByDate: (eventId: number) => check(supabase.from("events").update({ manual_order: false }).eq("id", eventId)),
 };

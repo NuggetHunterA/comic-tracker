@@ -16,6 +16,7 @@ import { StapelList, StapelSeries, type StapelSel } from "./screens/StapelScreen
 import { KatalogList } from "./screens/KatalogScreen";
 import { SerienList, SeriesDetail, type SerienSel, type SerienTab } from "./screens/SerienScreen";
 import { EventDetail } from "./components/EventDetail";
+import { SeriesOrder } from "./components/SeriesOrder";
 import { onOpenEvent, onOpenRun } from "./lib/nav";
 
 const WIDE = "(min-width: 700px)";
@@ -124,6 +125,7 @@ function Shell() {
     const s = stapelSel;
     const body =
       s?.kind === "import" ? <ImportForm onDone={closeStapel} /> :
+      s?.kind === "order" ? <SeriesOrder /> :
       s?.kind === "series" ? <StapelSeries seriesId={s.id} onSelect={setStapelSel} /> :
       s?.kind === "all" ? (
         <AllIssues key={s.id} seriesId={s.id} sel={s.sel}

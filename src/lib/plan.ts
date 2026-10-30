@@ -8,6 +8,10 @@
 //   series only after an event. An event issue is read in event order even when
 //   earlier issues of its series are still open; the series goes on after it.
 // - Without an event a series is read in blocks of BLOCK_SIZE issues.
+// - The reader can rank series: ranked series take their turn first, in rank
+//   order, the rest by date. Series marked "whole" (above the line) are read
+//   to the end before the others take turns; an event inside one is still read
+//   in one go where the series reaches it. Old pile first still holds.
 // - A started event (one of its issues read) comes first every evening, before
 //   the old pile, as far as its issues are readable. At an issue that is not
 //   readable yet it pauses, and the rest of the plan goes on as usual.
@@ -34,6 +38,14 @@ export interface PlanIssue {
   /** The event the issue belongs to and its place in it, or null. */
   event: { id: number; position: number } | null;
 }
+
+/** The reader's series ranking: series ids in order, and those read to the end in one go. */
+export interface SeriesOrder {
+  ranked: number[];
+  whole: Set<number>;
+}
+
+const NO_ORDER: SeriesOrder = { ranked: [], whole: new Set() };
 
 export interface Pin {
   issueId: number;
@@ -63,9 +75,11 @@ const byNumber = (a: PlanIssue, b: PlanIssue) =>
   a.id - b.id;
 
 /** Orders issues the way they should be read, ignoring dates. */
-export function readingQueue(issues: PlanIssue[], blockSize = BLOCK_SIZE): PlanIssue[] {
+export function readingQueue(issues: PlanIssue[], blockSize = BLOCK_SIZE, order: SeriesOrder = NO_ORDER): PlanIssue[] {
   const remaining = new Map(issues.map((i) => [i.id, i]));
   const members = eventMembers(issues);
+  const rankOf = new Map(order.ranked.map((s, k) => [s, k]));
+  const rank = (s: number) => rankOf.get(s) ?? order.ranked.length;
 
   const out: PlanIssue[] = [];
   const take = (i: PlanIssue) => {
@@ -82,9 +96,21 @@ export function readingQueue(issues: PlanIssue[], blockSize = BLOCK_SIZE): PlanI
     }
     const firstDate = (list: PlanIssue[]) => list.reduce((m, i) => (i.storeDate && i.storeDate < m ? i.storeDate : m), "9999");
     const rotation = [...bySeries.keys()].sort(
-      (a, b) => firstDate(bySeries.get(a)!).localeCompare(firstDate(bySeries.get(b)!)) || a - b,
+      (a, b) => rank(a) - rank(b) || firstDate(bySeries.get(a)!).localeCompare(firstDate(bySeries.get(b)!)) || a - b,
     );
     const nextOf = (s: number) => bySeries.get(s)!.find((i) => remaining.has(i.id));
+    const takeEvent = (eventId: number) => {
+      for (const i of members.get(eventId)!) if (remaining.has(i.id)) take(i);
+    };
+
+    // Series above the line: each to the end, an event where the series reaches it.
+    for (const seriesId of rotation) {
+      if (!order.whole.has(seriesId)) continue;
+      for (let i = nextOf(seriesId); i; i = nextOf(seriesId)) {
+        if (i.event) takeEvent(i.event.id);
+        else take(i);
+      }
+    }
 
     let idx = 0;
     while (rotation.some((s) => nextOf(s))) {
@@ -93,7 +119,7 @@ export function readingQueue(issues: PlanIssue[], blockSize = BLOCK_SIZE): PlanI
       const head = nextOf(seriesId);
       if (!head) continue;
       if (head.event) {
-        for (const i of members.get(head.event.id)!) if (remaining.has(i.id)) take(i);
+        takeEvent(head.event.id);
         continue;
       }
       // No event: a block of this series, stopping before the next event starts.
@@ -126,6 +152,7 @@ export function buildPlan(opts: {
   today: string;
   maxPerEvening: number;
   blockSize?: number;
+  order?: SeriesOrder;
   /** Started events (an issue already read), most urgent first. */
   startedEvents?: number[];
 }): Evening[] {
@@ -147,6 +174,7 @@ export function buildPlan(opts: {
   let queue = readingQueue(
     opts.issues.filter((i) => !pinned.has(i.id) && !following.has(i.id) && !early.has(i.id)),
     opts.blockSize,
+    opts.order,
   );
   const lastPinDay = [...pinsByDay.keys()].sort().pop() ?? today;
   const notBefore = notBeforePins(opts.issues, pins, pinned);

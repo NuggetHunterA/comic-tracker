@@ -61,6 +61,13 @@ export interface EventIssue {
   position: number;
 }
 
+/** A series' place in the reader's ranking; whole: read to the end in one go. */
+export interface SeriesRank {
+  series_id: number;
+  position: number;
+  whole: boolean;
+}
+
 export interface Settings {
   infinite_delay_days: number;
   max_per_evening: number;

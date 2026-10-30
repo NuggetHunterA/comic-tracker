@@ -541,3 +541,27 @@ button.mrow:hover > span { text-decoration: underline; text-decoration-color: va
 .ord .iconbtn { width: 40px; flex: none; color: var(--muted); }
 .ord .iconbtn:hover { color: var(--ink); }
 .state { font-family: var(--mono); font-weight: 700; font-size: 12px; white-space: nowrap; }
+
+/* ---------- Stapel: the whole reading order, evening by evening ---------- */
+.order { display: flex; flex-direction: column; border-top: 3px solid var(--ink); }
+.eve { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.eve > .d { width: 84px; flex: none; font-size: 14px; padding-top: 6px; white-space: nowrap; }
+.eve .stk { font-size: 12px; transform: rotate(-1deg); }
+.eve .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+.eve .strip { display: flex; gap: 6px; padding-top: 6px; flex-wrap: wrap; }
+.eve .strip button { padding: 0; border: none; background: none; cursor: pointer; }
+.eve .strip button.on .cv { outline: 3px solid var(--pink); outline-offset: 2px; }
+.eve .strip .cv { width: 40px; }
+.eve .runs { font-size: 15px; line-height: 1.25; }
+.eve .fest { font-family: var(--mono); font-weight: 700; font-size: 11px; border: 2px solid var(--ink); padding: 0 4px; margin-left: 6px; vertical-align: 1px; white-space: nowrap; }
+.order .gap { font-family: var(--mono); font-size: 12px; color: var(--muted); padding: 6px 0 6px 96px; border-bottom: 1px solid var(--rule); }
+
+/* Serien ordnen: the line between "to the end" and "taking turns". */
+.ord li.line { background: var(--ink); color: var(--paper); margin: 4px -4px; border-bottom: none; transform: rotate(-0.6deg); }
+.ord li.line .grip { color: var(--rule); }
+.ord li.line span { font-family: var(--mono); font-weight: 700; font-size: 13px; letter-spacing: 0.04em; color: var(--pink); }
+.ord li.line.drag { background: var(--ink); outline-color: var(--pink); }
+.rot { border: 2px dashed var(--ink); padding: 10px 12px; font-size: 14px; line-height: 1.4; display: flex; flex-direction: column; gap: 4px; }
+.rot .d { font-size: 12px; color: var(--muted); }
+.locked { display: flex; gap: 8px; align-items: center; font-size: 14px; color: var(--muted); }
+.locked svg { flex: none; }

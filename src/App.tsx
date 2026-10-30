@@ -16,7 +16,7 @@ import { StapelList, StapelSeries, type StapelSel } from "./screens/StapelScreen
 import { KatalogList } from "./screens/KatalogScreen";
 import { SerienList, SeriesDetail, type SerienSel, type SerienTab } from "./screens/SerienScreen";
 import { EventDetail } from "./components/EventDetail";
-import { onOpenEvent } from "./lib/nav";
+import { onOpenEvent, onOpenRun } from "./lib/nav";
 
 const WIDE = "(min-width: 700px)";
 
@@ -103,6 +103,12 @@ function Shell() {
     setSerienSel({ kind: "event", id });
     window.location.hash = "serien";
   }), []);
+  // So does the detail's series line, to the whole run of the series.
+  useEffect(() => onOpenRun((id, sel) => {
+    setSerienTab("serien");
+    setSerienSel({ kind: "all", id, sel });
+    window.location.hash = "serien";
+  }), []);
 
   let list: React.ReactNode = null;
   let detail: React.ReactNode = null;
@@ -131,7 +137,7 @@ function Shell() {
           ) : wide && s.series ? (
             <BackButton onClick={() => setStapelSel({ kind: "series", id: s.series! })}>Zur Serie</BackButton>
           ) : null}
-          <IssueDetail issueId={s.id} onClose={closeStapel} fromRun={s.fromAll} />
+          <IssueDetail issueId={s.id} onClose={closeStapel} />
         </>
       ) : wide ? <EmptyDetail text="Wähl links eine Serie, um ihre Hefte zu sehen." /> : null;
     detail = body ? <Detail wide={wide} label="Stapel im Detail" onClose={closeStapel}>{body}</Detail> : null;
@@ -155,7 +161,7 @@ function Shell() {
       s?.kind === "issue" ? (
         <>
           {s.back && <BackButton onClick={() => setSerienSel(s.back!)}>{s.back.kind === "all" ? "Alle Hefte" : seriesLong(data?.series.get(s.back.id))}</BackButton>}
-          <IssueDetail issueId={s.id} onClose={closeSerien} fromRun={s.back?.kind === "all"} />
+          <IssueDetail issueId={s.id} onClose={closeSerien} />
         </>
       ) :
       wide ? <EmptyDetail text={serienTab === "serien" ? "Wähl links eine Serie." : serienTab === "events" ? "Wähl links ein Event oder leg ein neues an." : "Wähl links ein Heft von der Wunschliste."} /> : null;

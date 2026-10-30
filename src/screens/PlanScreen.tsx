@@ -171,7 +171,7 @@ function Band({ marks, k }: { marks: (EventMark | undefined)[]; k: number }) {
 }
 
 /** "K.O. 6–7" in front of an evening that goes on with an event. */
-function EventTags({ issues, marks }: { issues: Issue[]; marks: Map<number, EventMark> }) {
+export function EventTags({ issues, marks }: { issues: Issue[]; marks: Map<number, EventMark> }) {
   const runs = new Map<number, { m: EventMark; from: number; to: number }>();
   for (const i of issues) {
     const m = marks.get(i.id);

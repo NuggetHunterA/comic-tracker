@@ -77,6 +77,42 @@ describe("readingQueue", () => {
     ]);
     expect(nums(q)).toEqual(["10#1", "20#50", "10#2", "20#49"]);
   });
+
+  it("lets ranked series take their turn first, the rest by date", () => {
+    const issues = [1, 2].flatMap((n) => [
+      issue(n, 10, n),
+      issue(100 + n, 20, n, { storeDate: "2024-02-01" }),
+      issue(200 + n, 30, n, { storeDate: "2024-03-01" }),
+    ]);
+    const q = readingQueue(issues, 1, { ranked: [30], whole: new Set() });
+    expect(nums(q)).toEqual(["30#1", "10#1", "20#1", "30#2", "10#2", "20#2"]);
+  });
+
+  it("reads series above the line to the end before the others take turns", () => {
+    const issues = [1, 2, 3].flatMap((n) => [issue(n, 10, n), issue(100 + n, 20, n, { storeDate: "2024-02-01" })]);
+    const q = readingQueue(issues, 2, { ranked: [20, 10], whole: new Set([20]) });
+    expect(nums(q)).toEqual(["20#1", "20#2", "20#3", "10#1", "10#2", "10#3"]);
+  });
+
+  it("reads an event in one go where a whole series reaches it, then goes on with the series", () => {
+    const q = readingQueue([
+      issue(1, 10, 1),
+      issue(2, 10, 2, { event: { id: 9, position: 2 } }),
+      issue(3, 10, 3),
+      issue(11, 20, 7, { event: { id: 9, position: 1 } }),
+      issue(12, 20, 8),
+    ], 4, { ranked: [10], whole: new Set([10]) });
+    expect(nums(q)).toEqual(["10#1", "20#7", "10#2", "10#3", "20#8"]);
+  });
+
+  it("keeps the old pile first even for a whole series", () => {
+    const q = readingQueue([
+      issue(1, 10, 1, { oldPile: true }),
+      issue(2, 20, 1),
+      issue(3, 20, 2),
+    ], 4, { ranked: [20], whole: new Set([20]) });
+    expect(nums(q)).toEqual(["10#1", "20#1", "20#2"]);
+  });
 });
 
 describe("buildPlan", () => {

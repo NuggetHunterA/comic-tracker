@@ -1,16 +1,18 @@
 import { useMemo, useState } from "react";
 import { useStore, type Item } from "../lib/store";
-import { shortDate } from "../lib/dates";
-import { issueTitle, seriesLong, seriesTitle } from "../lib/labels";
+import { dayLabel, fromIso, shortDate } from "../lib/dates";
+import { issueTitle, runsLabel, seriesLong, seriesTitle } from "../lib/labels";
 import { Cover } from "../components/Cover";
 import { useSeriesRange } from "../components/AllIssues";
 import { AllIssuesButton } from "./SerienScreen";
+import { EventTags } from "./PlanScreen";
 
 export type StapelSel =
   | { kind: "series"; id: number }
   | { kind: "all"; id: number; sel?: number }
   | { kind: "issue"; id: number; series?: number; fromAll?: boolean }
   | { kind: "import" }
+  | { kind: "order" }
   | null;
 type Filter = "alle" | "print" | "infinite" | "gelesen";
 
@@ -50,16 +52,26 @@ export function useStapel(filter: Filter) {
 
 export function StapelList({ wide, sel, onSelect }: { wide: boolean; sel: StapelSel; onSelect: (s: StapelSel) => void }) {
   const [filter, setFilter] = useState<Filter>("alle");
+  const [view, setView] = useState<"serie" | "reihenfolge">("serie");
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const { readable, expected, groups } = useStapel(filter);
   const reading = filter === "gelesen";
+  const counts = useStapel("alle");
 
   return (
     <>
       <h1 style={{ fontSize: wide ? 48 : 52 }}>Stapel</h1>
       <span className="d" style={{ fontSize: 14 }}>
-        {reading ? `${readable.length} GELESEN` : `${readable.length} LESBAR · ${expected.length} ERWARTET`}
+        {view === "serie" && reading ? `${readable.length} GELESEN` : view === "serie" ? `${readable.length} LESBAR · ${expected.length} ERWARTET` : `${counts.readable.length} LESBAR · ${counts.expected.length} ERWARTET`}
       </span>
+      <div className="tabs" role="group" aria-label="Ansicht">
+        {(["serie", "reihenfolge"] as const).map((v) => (
+          <button key={v} type="button" className={`seg ${view === v ? "on" : ""}`} aria-pressed={view === v} onClick={() => setView(v)}>
+            {v === "serie" ? "Nach Serie" : "Reihenfolge"}
+          </button>
+        ))}
+      </div>
+      {view === "reihenfolge" ? <StapelOrder sel={sel} onSelect={onSelect} /> : <>
       <div className="chips" role="group" aria-label="Filter">
         {(["alle", "print", "infinite", "gelesen"] as Filter[]).map((f) => (
           <button key={f} type="button" className={`chip ${filter === f ? "on" : ""}`} aria-pressed={filter === f} onClick={() => setFilter(f)}>
@@ -139,6 +151,83 @@ export function StapelList({ wide, sel, onSelect }: { wide: boolean; sel: Stapel
       <button type="button" className="btn" style={{ alignSelf: "flex-start", marginTop: 8 }} onClick={() => onSelect({ kind: "import" })}>
         Altbestand eintragen
       </button>
+      </>}
+    </>
+  );
+}
+
+/** The whole plan, evening by evening, and what has no date yet. */
+function StapelOrder({ sel, onSelect }: { sel: StapelSel; onSelect: (s: StapelSel) => void }) {
+  const { data, plan, today, items, stalled, eventOf } = useStore();
+  if (!data) return null;
+  const byId = new Map(items.map((i) => [i.issue.id, i]));
+  const evenings = plan.filter((e) => e.entries.length > 0);
+  const total = evenings.reduce((n, e) => n + e.entries.length, 0);
+  const last = evenings[evenings.length - 1]?.date;
+  const days = (a: string, b: string) => Math.round((fromIso(b).getTime() - fromIso(a).getTime()) / 86400000);
+
+  return (
+    <>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <span className="mut" style={{ fontSize: 14 }}>
+          {total === 0 ? "Nichts geplant." : `${total} ${total === 1 ? "Heft" : "Hefte"}, ${data.settings.max_per_evening} pro Abend${last ? `, bis ${dayLabel(last)}` : ""}`}
+        </span>
+        <button type="button" className={`btn ${sel?.kind === "order" ? "solid" : ""}`} style={{ minHeight: 40, fontSize: 14, display: "inline-flex", alignItems: "center", gap: 8 }}
+          aria-pressed={sel?.kind === "order"} onClick={() => onSelect({ kind: "order" })}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" aria-hidden="true"><path d="M7 4v16M7 4l-3 3M7 4l3 3M17 20V4M17 20l-3-3M17 20l3-3" /></svg>
+          Serien ordnen
+        </button>
+      </div>
+      {evenings.length > 0 && (
+        <section className="order" aria-label="Lesereihenfolge">
+          {evenings.map((e, k) => {
+            const list = e.entries.map((x) => byId.get(x.issueId)).filter((x): x is Item => !!x);
+            const gap = k > 0 ? days(evenings[k - 1].date, e.date) - 1 : 0;
+            return (
+              <div key={e.date}>
+                {gap > 0 && <div className="gap">… {gap === 1 ? "1 ABEND" : `${gap} ABENDE`} OHNE LESBARES HEFT</div>}
+                <div className="eve">
+                  <span className="d">{e.date === today ? <span className="stk">HEUTE</span> : dayLabel(e.date)}</span>
+                  <div className="body">
+                    <div className="strip">
+                      {list.map((i) => (
+                        <button key={i.issue.id} type="button" onClick={() => onSelect({ kind: "issue", id: i.issue.id })} aria-label={issueTitle(i.issue, i.series)}
+                          className={sel?.kind === "issue" && sel.id === i.issue.id ? "on" : ""}>
+                          <Cover issue={i.issue} readable={i.readable} />
+                        </button>
+                      ))}
+                    </div>
+                    <span className="runs">
+                      <EventTags issues={list.map((i) => i.issue)} marks={eventOf} />
+                      {runsLabel(list)}
+                      {e.entries.some((x) => x.pinned) && <span className="fest">FEST</span>}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </section>
+      )}
+      {stalled.length > 0 && (
+        <section aria-label="Ohne Termin" style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
+          <h2 style={{ fontSize: 22 }}>Ohne Termin</h2>
+          <div style={{ borderTop: "3px solid var(--ink)", display: "flex", flexDirection: "column" }}>
+            {stalled.map(({ issueId, behind }) => {
+              const it = byId.get(issueId);
+              if (!it) return null;
+              return (
+                <button key={issueId} type="button" className="evening waitrow" style={{ alignItems: "center" }} onClick={() => onSelect({ kind: "issue", id: issueId })}>
+                  <Cover issue={it.issue} readable={false} style={{ width: 30, flex: "none" }} />
+                  <span style={{ fontSize: 15, flex: 1 }}>
+                    <strong>{issueTitle(it.issue, it.series)}</strong> {it.ui.format === "print" ? "ist nicht als gekauft markiert" : "hat noch kein Erscheinungsdatum"}, dahinter {behind === 1 ? "1 Heft" : `${behind} Hefte`}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
     </>
   );
 }

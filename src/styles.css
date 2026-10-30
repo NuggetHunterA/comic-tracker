@@ -142,6 +142,13 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-weight: 700;
 .blackbar { background: var(--ink); color: var(--paper); padding: 10px 12px; display: flex; gap: 12px; align-items: center; }
 .blackbar .cv { width: 40px; flex: none; border-color: var(--paper); }
 .grid { display: grid; gap: 16px 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* Catalog release week: a thin toner rule across the grid, the week's date on it. */
+.week {
+  grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  border-top: 1px solid var(--ink); padding-top: 5px; margin-top: 10px; font-size: 13px; font-weight: 700;
+}
+.week:first-child { margin-top: 0; }
+.week .mut { font-weight: 400; }
 .tile { display: flex; flex-direction: column; gap: 5px; background: none; border: none; padding: 0; text-align: left; cursor: pointer; }
 .tile .t { font-weight: 700; font-size: 14px; line-height: 1.15; }
 .tile.sel .cv { outline: 3px solid var(--pink); outline-offset: 3px; }

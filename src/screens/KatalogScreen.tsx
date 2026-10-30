@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useStore } from "../lib/store";
-import { addDays, monthLabel, monthStart, shortDate } from "../lib/dates";
+import { addDays, dayLabel, monthLabel, monthStart, shortDate, weekStart } from "../lib/dates";
 import { issueTitle } from "../lib/labels";
 import type { Issue, Series } from "../lib/types";
 import { Cover } from "../components/Cover";
@@ -62,6 +62,17 @@ export function KatalogList({ month, setMonth, selected, onSelect }: {
     );
   }, [rows, mine, firsts, followed, data]);
 
+  // Release weeks in date order, each opened by a thin rule.
+  const weeks = useMemo(() => {
+    const out: { key: string; rows: Row[] }[] = [];
+    for (const r of shown) {
+      const key = r.store_date ? weekStart(r.store_date) : "";
+      if (out[out.length - 1]?.key !== key) out.push({ key, rows: [] });
+      out[out.length - 1].rows.push(r);
+    }
+    return out;
+  }, [shown]);
+
   const minMonth = monthStart(today, -1);
   const maxMonth = monthStart(today, 2);
 
@@ -104,13 +115,21 @@ export function KatalogList({ month, setMonth, selected, onSelect }: {
         </div>
       )}
       <section aria-label="Neuerscheinungen" className="grid" style={{ paddingTop: 10 }}>
-        {shown.map((r) => (
-          <button key={r.id} type="button" className={`tile ${selected === r.id ? "sel" : ""}`} onClick={() => onSelect(r.id)}>
-            <Cover issue={r} showNumber={false} tape={followed.has(r.series_id) ? "FOLGE ICH" : undefined} />
-            {r.number === "1" && <span className="stk" style={{ alignSelf: "flex-end", marginTop: -30, marginRight: -6, transform: "rotate(6deg)", position: "relative", zIndex: 3 }}>#1</span>}
-            <span className="t">{issueTitle(r, r.series)}</span>
-            <span className="d mut" style={{ fontSize: 12 }}>{r.store_date ? shortDate(r.store_date) : ""}</span>
-          </button>
+        {weeks.map((w) => (
+          <Fragment key={w.key}>
+            <div className="week d">
+              <span>{w.rows[0].store_date ? dayLabel(w.rows[0].store_date) : "OHNE DATUM"}</span>
+              <span className="mut">{w.rows.length} {w.rows.length === 1 ? "HEFT" : "HEFTE"}</span>
+            </div>
+            {w.rows.map((r) => (
+              <button key={r.id} type="button" className={`tile ${selected === r.id ? "sel" : ""}`} onClick={() => onSelect(r.id)}>
+                <Cover issue={r} showNumber={false} tape={followed.has(r.series_id) ? "FOLGE ICH" : undefined} />
+                {r.number === "1" && <span className="stk" style={{ alignSelf: "flex-end", marginTop: -30, marginRight: -6, transform: "rotate(6deg)", position: "relative", zIndex: 3 }}>#1</span>}
+                <span className="t">{issueTitle(r, r.series)}</span>
+                <span className="d mut" style={{ fontSize: 12 }}>{r.store_date ? shortDate(r.store_date) : ""}</span>
+              </button>
+            ))}
+          </Fragment>
         ))}
       </section>
     </>

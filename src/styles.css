@@ -621,3 +621,8 @@ button.mrow:hover > span { text-decoration: underline; text-decoration-color: va
 .gstamp b { font-family: var(--mono); font-size: 12px; margin-left: 1px; }
 .gstamp.avg b { margin: 0 3px 0 0; }
 .bz-rank li:first-child .gstamp { background: var(--pink); }
+/* The way into Bilanz: a quiet bar-chart mark beside the title, a pink print block when open. */
+.titlerow { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.statbtn { color: var(--muted); margin: -2px -10px 0 0; }
+.statbtn:hover { color: var(--ink); }
+.statbtn.on { color: var(--ink); background: var(--pink); box-shadow: -3px -2px 0 var(--ink); margin-right: 0; }

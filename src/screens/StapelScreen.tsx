@@ -6,6 +6,7 @@ import { Cover } from "../components/Cover";
 import { useSeriesRange } from "../components/AllIssues";
 import { AllIssuesButton } from "./SerienScreen";
 import { EventTags } from "./PlanScreen";
+import { Bilanz } from "./Bilanz";
 
 export type StapelSel =
   | { kind: "series"; id: number }
@@ -46,13 +47,15 @@ export function useStapel(filter: Filter) {
     }
     const rank = (sid: number) => firstPlanned.get(sid) ?? Infinity;
     const ordered = [...groups.entries()].sort((a, b) => rank(a[0]) - rank(b[0]) || b[1].length - a[1].length);
-    return { readable, expected, groups: ordered };
+    const read = filter === "alle" ? items.filter((i) => i.ui.status === "read").length : 0;
+    return { readable, expected, groups: ordered, read };
   }, [items, plan, filter]);
 }
 
 export function StapelList({ wide, sel, onSelect }: { wide: boolean; sel: StapelSel; onSelect: (s: StapelSel) => void }) {
   const [filter, setFilter] = useState<Filter>("alle");
   const [view, setView] = useState<"serie" | "reihenfolge">("serie");
+  const [bilanz, setBilanz] = useState(false);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const { readable, expected, groups } = useStapel(filter);
   const reading = filter === "gelesen";
@@ -60,10 +63,19 @@ export function StapelList({ wide, sel, onSelect }: { wide: boolean; sel: Stapel
 
   return (
     <>
-      <h1 style={{ fontSize: wide ? 48 : 52 }}>Stapel</h1>
+      <div className="titlerow">
+        <h1 style={{ fontSize: wide ? 48 : 52 }}>{bilanz ? "Bilanz" : "Stapel"}</h1>
+        <button type="button" className={`iconbtn statbtn ${bilanz ? "on" : ""}`} aria-pressed={bilanz} aria-label="Bilanz: was du gelesen hast"
+          title="Bilanz" onClick={() => setBilanz(!bilanz)}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" aria-hidden="true">
+            <path d="M3 21h18M6 21v-6M11 21V5M16 21v-9M21 21v-4" />
+          </svg>
+        </button>
+      </div>
       <span className="d" style={{ fontSize: 14 }}>
-        {view === "serie" && reading ? `${readable.length} GELESEN` : view === "serie" ? `${readable.length} LESBAR · ${expected.length} ERWARTET` : `${counts.readable.length} LESBAR · ${counts.expected.length} ERWARTET`}
+        {bilanz ? `${counts.read} GELESEN` : view === "serie" && reading ? `${readable.length} GELESEN` : view === "serie" ? `${readable.length} LESBAR · ${expected.length} ERWARTET` : `${counts.readable.length} LESBAR · ${counts.expected.length} ERWARTET`}
       </span>
+      {bilanz ? <Bilanz sel={sel} onSelect={onSelect} /> : <>
       <div className="tabs" role="group" aria-label="Ansicht">
         {(["serie", "reihenfolge"] as const).map((v) => (
           <button key={v} type="button" className={`seg ${view === v ? "on" : ""}`} aria-pressed={view === v} onClick={() => setView(v)}>
@@ -151,6 +163,7 @@ export function StapelList({ wide, sel, onSelect }: { wide: boolean; sel: Stapel
       <button type="button" className="btn" style={{ alignSelf: "flex-start", marginTop: 8 }} onClick={() => onSelect({ kind: "import" })}>
         Altbestand eintragen
       </button>
+      </>}
       </>}
     </>
   );

@@ -141,7 +141,7 @@ function Shell() {
           ) : null}
           <IssueDetail issueId={s.id} onClose={closeStapel} />
         </>
-      ) : wide ? <EmptyDetail text="Wähl links eine Serie, um ihre Hefte zu sehen." /> : null;
+      ) : wide ? <EmptyDetail text="Wähl links eine Serie oder ein Heft." /> : null;
     detail = body ? <Detail wide={wide} label="Stapel im Detail" onClose={closeStapel}>{body}</Detail> : null;
   } else if (tab === "katalog") {
     wideList = true;

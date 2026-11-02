@@ -6,6 +6,7 @@ import { Cover } from "../components/Cover";
 import { useSeriesRange } from "../components/AllIssues";
 import { AllIssuesButton } from "./SerienScreen";
 import { EventTags } from "./PlanScreen";
+import { Bilanz } from "./Bilanz";
 
 export type StapelSel =
   | { kind: "series"; id: number }
@@ -46,13 +47,14 @@ export function useStapel(filter: Filter) {
     }
     const rank = (sid: number) => firstPlanned.get(sid) ?? Infinity;
     const ordered = [...groups.entries()].sort((a, b) => rank(a[0]) - rank(b[0]) || b[1].length - a[1].length);
-    return { readable, expected, groups: ordered };
+    const read = filter === "alle" ? items.filter((i) => i.ui.status === "read").length : 0;
+    return { readable, expected, groups: ordered, read };
   }, [items, plan, filter]);
 }
 
 export function StapelList({ wide, sel, onSelect }: { wide: boolean; sel: StapelSel; onSelect: (s: StapelSel) => void }) {
   const [filter, setFilter] = useState<Filter>("alle");
-  const [view, setView] = useState<"serie" | "reihenfolge">("serie");
+  const [view, setView] = useState<"serie" | "reihenfolge" | "bilanz">("serie");
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const { readable, expected, groups } = useStapel(filter);
   const reading = filter === "gelesen";
@@ -62,16 +64,16 @@ export function StapelList({ wide, sel, onSelect }: { wide: boolean; sel: Stapel
     <>
       <h1 style={{ fontSize: wide ? 48 : 52 }}>Stapel</h1>
       <span className="d" style={{ fontSize: 14 }}>
-        {view === "serie" && reading ? `${readable.length} GELESEN` : view === "serie" ? `${readable.length} LESBAR · ${expected.length} ERWARTET` : `${counts.readable.length} LESBAR · ${counts.expected.length} ERWARTET`}
+        {view === "bilanz" ? `${counts.read} GELESEN` : view === "serie" && reading ? `${readable.length} GELESEN` : view === "serie" ? `${readable.length} LESBAR · ${expected.length} ERWARTET` : `${counts.readable.length} LESBAR · ${counts.expected.length} ERWARTET`}
       </span>
       <div className="tabs" role="group" aria-label="Ansicht">
-        {(["serie", "reihenfolge"] as const).map((v) => (
+        {(["serie", "reihenfolge", "bilanz"] as const).map((v) => (
           <button key={v} type="button" className={`seg ${view === v ? "on" : ""}`} aria-pressed={view === v} onClick={() => setView(v)}>
-            {v === "serie" ? "Nach Serie" : "Reihenfolge"}
+            {v === "serie" ? "Nach Serie" : v === "reihenfolge" ? "Reihenfolge" : "Bilanz"}
           </button>
         ))}
       </div>
-      {view === "reihenfolge" ? <StapelOrder sel={sel} onSelect={onSelect} /> : <>
+      {view === "bilanz" ? <Bilanz sel={sel} onSelect={onSelect} /> : view === "reihenfolge" ? <StapelOrder sel={sel} onSelect={onSelect} /> : <>
       <div className="chips" role="group" aria-label="Filter">
         {(["alle", "print", "infinite", "gelesen"] as Filter[]).map((f) => (
           <button key={f} type="button" className={`chip ${filter === f ? "on" : ""}`} aria-pressed={filter === f} onClick={() => setFilter(f)}>

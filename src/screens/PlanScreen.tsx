@@ -85,12 +85,19 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
         </>
       ) : (
         <div className="empty">
-          <strong style={{ fontSize: 17 }}>Heute ist nichts lesbar.</strong>
+          <strong style={{ fontSize: 17 }}>{readToday > 0 ? "Für heute geschafft." : "Heute ist nichts lesbar."}</strong>
           <span className="mut">
-            {items.length === 0
+            {readToday > 0
+              ? next.length > 0 ? `Morgen geht es mit ${runsLabel(next[0].list)} weiter.` : "Mehr ist gerade nicht lesbar."
+              : items.length === 0
               ? "Trag deinen Altbestand im Stapel ein oder folge Serien, dann füllt sich der Plan von selbst."
               : "Alles gelesen oder noch nicht verfügbar. Neue Hefte rutschen automatisch nach."}
           </span>
+          {readToday > 0 && next[0]?.list[0] && (
+            <button type="button" className="btn" onClick={() => onSelect(next[0].list[0].issue.id)}>
+              Noch eins: {issueTitle(next[0].list[0].issue, next[0].list[0].series)}
+            </button>
+          )}
           {items.length === 0 && <a className="btn solid" href="#stapel" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }}>Altbestand eintragen</a>}
         </div>
       )}

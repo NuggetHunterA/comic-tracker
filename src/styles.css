@@ -557,6 +557,11 @@ button.mrow:hover > span { text-decoration: underline; text-decoration-color: va
 .order .gap { font-family: var(--mono); font-size: 12px; color: var(--muted); padding: 6px 0 6px 96px; border-bottom: 1px solid var(--rule); }
 
 /* Serien ordnen: the line between "to the end" and "taking turns". */
+.ord.issues li { gap: 10px; }
+.ord.issues li.newday { border-top: 2px solid var(--ink); }
+.ord.issues .day { flex: none; font-size: 13px; font-weight: 700; text-align: right; min-width: 64px; padding-right: 2px; }
+.resort { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; justify-content: space-between; border: 2px dashed var(--ink); padding: 10px 12px; font-size: 15px; line-height: 1.35; }
+.resort span { flex: 1 1 22ch; }
 .ord li.line { background: var(--ink); color: var(--paper); margin: 4px -4px; border-bottom: none; transform: rotate(-0.6deg); }
 .ord li.line .grip { color: var(--rule); }
 .ord li.line span { font-family: var(--mono); font-weight: 700; font-size: 13px; letter-spacing: 0.04em; color: var(--pink); }

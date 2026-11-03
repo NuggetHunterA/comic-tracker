@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { moveInList, planEvenings, readableFrom, sortList, stalledSeries, syncList, type Evening, type ListEntry, type ListRules, type PlanIssue } from "./plan";
+import { moveInList, planEvenings, releaseInList, readableFrom, sortList, stalledSeries, syncList, type Evening, type ListEntry, type ListRules, type PlanIssue } from "./plan";
 import { supabase } from "./supabase";
 import { todayIso } from "./dates";
 import { eventOrder, insertAt } from "./events";
@@ -61,6 +61,8 @@ interface Store {
   resort: () => Promise<void>;
   /** Moves an issue to a place in the list (0 is first). */
   moveTo: (issueId: number, index: number) => Promise<void>;
+  /** Hands one issue moved by hand back to the rules, or all of them (a full sort). */
+  release: (issueId?: number) => Promise<void>;
   events: EventView[];
   eventOf: Map<number, EventMark>;
   /** Series held up by an issue without a reading date, and how many issues wait behind it. */
@@ -291,13 +293,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     await save(moveInList(planned.list, issueId, index), planned.key);
   }, [planned, save]);
 
+  const release = useCallback(async (issueId?: number) => {
+    if (!planned) return;
+    const next = issueId === undefined ? sortList(planned.planIssues, planned.rules) : releaseInList(planned.list, issueId, planned.planIssues);
+    await save(next, planned.key);
+  }, [planned, save]);
+
   const plan = planned?.plan ?? [];
   const stalled = planned?.stalled ?? [];
   const list = planned?.list ?? NO_LIST;
 
   const value = useMemo(
-    () => ({ data, error, today, items, plan, list, resort, moveTo, events, eventOf, stalled, reload, remember }),
-    [data, error, today, items, plan, list, resort, moveTo, events, eventOf, stalled, reload, remember],
+    () => ({ data, error, today, items, plan, list, resort, moveTo, release, events, eventOf, stalled, reload, remember }),
+    [data, error, today, items, plan, list, resort, moveTo, release, events, eventOf, stalled, reload, remember],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

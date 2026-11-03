@@ -261,6 +261,16 @@ export function planEvenings(opts: {
   return evenings;
 }
 
+/** Hands an issue moved by hand back to the rules: it goes where a new issue would go. */
+export function releaseInList(list: ListEntry[], issueId: number, issues: PlanIssue[]): ListEntry[] {
+  const byId = new Map(issues.map((i) => [i.id, i]));
+  const i = byId.get(issueId);
+  const out = list.filter((e) => e.issueId !== issueId && byId.has(e.issueId));
+  if (!i) return out;
+  out.splice(slotFor(out, i, byId), 0, { issueId, manual: false, added: false });
+  return out;
+}
+
 /** Moves one issue to a place in the list; it stays there through later sorts. */
 export function moveInList(list: ListEntry[], issueId: number, to: number): ListEntry[] {
   const out = list.filter((e) => e.issueId !== issueId);

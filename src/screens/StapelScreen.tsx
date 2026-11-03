@@ -7,6 +7,7 @@ import { useSeriesRange } from "../components/AllIssues";
 import { AllIssuesButton } from "./SerienScreen";
 import { EventTags } from "./PlanScreen";
 import { Bilanz } from "./Bilanz";
+import { HandIcon } from "../components/HandIcon";
 
 export type StapelSel =
   | { kind: "series"; id: number }
@@ -223,7 +224,7 @@ function StapelOrder({ sel, onSelect }: { sel: StapelSel; onSelect: (s: StapelSe
                     <span className="runs">
                       <EventTags issues={list.map((i) => i.issue)} marks={eventOf} />
                       {runsLabel(list)}
-                      {e.entries.some((x) => x.pinned) && <span className="fest">VON HAND</span>}
+                      {e.entries.some((x) => x.pinned) && <span className="handmark" title="Von Hand verschoben" aria-label="Von Hand verschoben" role="img"><HandIcon size={15} /></span>}
                     </span>
                   </div>
                 </div>

@@ -3,6 +3,7 @@ import { useStore } from "../lib/store";
 import { dayLabel, shortDate } from "../lib/dates";
 import { issueTitle } from "../lib/labels";
 import { Cover } from "./Cover";
+import { HandIcon } from "./HandIcon";
 import { useRun } from "./useRun";
 
 const GRIP = (
@@ -17,7 +18,7 @@ const GRIP = (
  * place, also when the list is sorted again.
  */
 export function IssueOrder() {
-  const { data, items, plan, list, today, resort, moveTo } = useStore();
+  const { data, items, plan, list, today, resort, moveTo, release } = useStore();
   const { run, busy, error } = useRun();
 
   const saved = list.map((e) => e.issueId);
@@ -36,6 +37,7 @@ export function IssueOrder() {
 
   if (!data) return null;
   const added = list.filter((e) => e.added).length;
+  const manual = list.filter((e) => e.manual).length;
   const label = (id: number) => {
     const w = when.get(id);
     if (w) return w;
@@ -80,6 +82,14 @@ export function IssueOrder() {
         <button type="button" className={`btn ${added > 0 ? "solid" : ""}`} disabled={busy || list.length === 0}
           onClick={() => run(() => resort())}>Neu sortieren</button>
       </div>
+      {manual > 0 && (
+        <div className="resort">
+          <span>
+            <strong>{manual === 1 ? "1 Heft" : `${manual} Hefte`}</strong> von Hand verschoben. Tipp die Hand<span className="handmark"><HandIcon size={15} /></span> an, um ein Heft zurück in die automatische Sortierung zu geben.
+          </span>
+          <button type="button" className="btn" disabled={busy} onClick={() => run(() => release())}>Alle zurücksetzen</button>
+        </div>
+      )}
       {ids.length === 0 ? (
         <p className="mut">Im Plan liegt nichts, das sich ordnen ließe.</p>
       ) : (
@@ -113,8 +123,14 @@ export function IssueOrder() {
                 <Cover issue={it.issue} readable={it.readable} showNumber={false} eventMark={false} />
                 <span className="t">
                   <strong>{title}</strong>
-                  {(e?.manual || e?.added) && <span className="mut" style={{ fontSize: 13 }}>{e.manual ? "Von Hand verschoben" : "Neu einsortiert"}</span>}
+                  {e?.added && <span className="mut" style={{ fontSize: 13 }}>Neu einsortiert</span>}
                 </span>
+                {e?.manual && (
+                  <button type="button" className="iconbtn hand" disabled={busy} title="Von Hand verschoben. Zurück in die automatische Sortierung"
+                    aria-label={`${title} ist von Hand verschoben. Zurück in die automatische Sortierung`} onClick={() => run(() => release(id))}>
+                    <HandIcon />
+                  </button>
+                )}
                 <span className={`day d ${first ? "" : "same"}`} aria-label={first ? undefined : day}>{first ? day : ""}</span>
               </li>
             );

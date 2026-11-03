@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moveInList, planEvenings, readableFrom, readingQueue, sortList, stalledSeries, syncList, type Evening, type ListEntry, type PlanIssue } from "./plan";
+import { moveInList, planEvenings, releaseInList, readableFrom, readingQueue, sortList, stalledSeries, syncList, type Evening, type ListEntry, type PlanIssue } from "./plan";
 
 const TODAY = "2026-10-29";
 
@@ -257,6 +257,17 @@ describe("syncList", () => {
     const list = [1, 2].map((issueId) => ({ issueId, manual: false, added: false }));
     expect(ids(syncList(list, [...issues, issue(3, 30, 1)]))).toEqual([1, 2, 3]);
     expect(ids(syncList(list, [...issues, issue(3, 30, 1, { oldPile: true })]))).toEqual([1, 3, 2]);
+  });
+});
+
+describe("releaseInList", () => {
+  it("puts an issue moved by hand back where the rules slot it, nothing else moves", () => {
+    const issues = [issue(1, 10, 1), issue(2, 10, 2), issue(3, 20, 1), issue(4, 20, 2)];
+    const list = moveInList([1, 3, 2, 4].map((issueId) => ({ issueId, manual: false, added: false })), 2, 0);
+    expect(ids(list)).toEqual([2, 1, 3, 4]);
+    const back = releaseInList(list, 2, issues);
+    expect(ids(back)).toEqual([1, 2, 3, 4]);
+    expect(back.every((e) => !e.manual && !e.added)).toBe(true);
   });
 });
 

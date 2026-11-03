@@ -5,6 +5,7 @@ import { addDays, dateLabel, dayLabel, shortDate } from "../lib/dates";
 import { FORMAT_LABEL, issueTitle, seriesLong } from "../lib/labels";
 import { readableFrom } from "../lib/plan";
 import type { Format, Issue } from "../lib/types";
+import { HandIcon } from "./HandIcon";
 import { Cover } from "./Cover";
 import { FormatChips } from "./FormatChips";
 import { useRun } from "./useRun";
@@ -53,7 +54,7 @@ function useDesk() {
 }
 
 function IssueDetailBody({ issueId, onClose }: Props) {
-  const { data, today, plan, list, moveTo } = useStore();
+  const { data, today, plan, list, moveTo, release } = useStore();
   const { run, busy, error } = useRun();
   const [pickFormat, setPickFormat] = useState<Format>("infinite");
   const [moreOpen, setMoreOpen] = useState(false);
@@ -129,6 +130,7 @@ function IssueDetailBody({ issueId, onClose }: Props) {
       ? { icon: "back", label: "Einplanen", title: "Wieder einplanen", onClick: () => run(() => actions.skipPlan(issueId, false)) }
       : { icon: "x", label: "Aus Plan", title: "Aus dem Plan", onClick: () => run(() => actions.skipPlan(issueId, true)) });
   }
+  if (list.some((e) => e.issueId === issueId && e.manual)) more.push({ label: "Zurück in die automatische Sortierung", onClick: () => run(() => release(issueId)) });
   if (!followed) more.push({ label: "Serie folgen", onClick: follow });
   const slots = cand.slice(0, 2);
   // What does not fit in the bar goes first under Mehr.
@@ -264,7 +266,7 @@ function PlanLine({ issueId, plan, today }: { issueId: number; plan: { date: str
     if (idx < 0) continue;
     const when = e.date === today ? "Heute" : e.date === addDays(today, 1) ? "Morgen" : dayLabel(e.date);
     return (
-      <div className="kv"><span>GEPLANT</span><span>{when}, {idx + 1} von {e.entries.length}{e.entries[idx].pinned ? " · von Hand" : ""}</span></div>
+      <div className="kv"><span>GEPLANT</span><span>{when}, {idx + 1} von {e.entries.length}{e.entries[idx].pinned && <> <span className="handmark" title="Von Hand verschoben" aria-label="Von Hand verschoben" role="img"><HandIcon size={15} /></span></>}</span></div>
     );
   }
   return null;

@@ -53,7 +53,7 @@ function useDesk() {
 }
 
 function IssueDetailBody({ issueId, onClose }: Props) {
-  const { data, today, plan } = useStore();
+  const { data, today, plan, list, moveTo } = useStore();
   const { run, busy, error } = useRun();
   const [pickFormat, setPickFormat] = useState<Format>("infinite");
   const [moreOpen, setMoreOpen] = useState(false);
@@ -118,10 +118,10 @@ function IssueDetailBody({ issueId, onClose }: Props) {
     else if (from) wait = `AB ${shortDate(from)}`;
     if (ui.format === "infinite" && readable) cand.push({ icon: "out", label: "Infinite", title: "In Infinite öffnen", href: infiniteHref });
     if (readable && !ui.skip_plan) {
-      const tomorrow = { icon: "next" as const, label: "Morgen", title: "Auf morgen", onClick: () => run(() => actions.pin(issueId, addDays(today, 1), 1)) };
+      const tomorrow = { icon: "next" as const, label: "Morgen", title: "Auf morgen", onClick: () => run(() => moveTo(issueId, afterTonight(plan, list, today, issueId))) };
       if (isTonight(plan, today, issueId)) cand.push(tomorrow);
       else {
-        cand.push({ icon: "tonight", label: "Heute", title: "Heute lesen", onClick: () => run(() => actions.pin(issueId, today, 1)) });
+        cand.push({ icon: "tonight", label: "Heute", title: "Heute lesen", onClick: () => run(() => moveTo(issueId, 0)) });
         more.push({ label: "Auf morgen", onClick: tomorrow.onClick! });
       }
     }
@@ -249,13 +249,22 @@ function isTonight(plan: { date: string; entries: { issueId: number }[] }[], tod
   return plan.some((e) => e.date === today && e.entries.some((x) => x.issueId === issueId));
 }
 
+/** The place in the list right after what is left of tonight, without the issue itself. */
+function afterTonight(plan: { date: string; entries: { issueId: number }[] }[], list: { issueId: number }[], today: string, issueId: number) {
+  const rest = list.filter((e) => e.issueId !== issueId);
+  const tonight = new Set(plan.find((e) => e.date === today)?.entries.map((x) => x.issueId).filter((id) => id !== issueId) ?? []);
+  let at = 0;
+  rest.forEach((e, k) => { if (tonight.has(e.issueId)) at = k + 1; });
+  return at;
+}
+
 function PlanLine({ issueId, plan, today }: { issueId: number; plan: { date: string; entries: { issueId: number; pinned: boolean }[] }[]; today: string }) {
   for (const e of plan) {
     const idx = e.entries.findIndex((x) => x.issueId === issueId);
     if (idx < 0) continue;
     const when = e.date === today ? "Heute" : e.date === addDays(today, 1) ? "Morgen" : dayLabel(e.date);
     return (
-      <div className="kv"><span>GEPLANT</span><span>{when}, {idx + 1} von {e.entries.length}{e.entries[idx].pinned ? " · fest" : ""}</span></div>
+      <div className="kv"><span>GEPLANT</span><span>{when}, {idx + 1} von {e.entries.length}{e.entries[idx].pinned ? " · von Hand" : ""}</span></div>
     );
   }
   return null;

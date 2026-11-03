@@ -14,6 +14,7 @@ export type StapelSel =
   | { kind: "issue"; id: number; series?: number; fromAll?: boolean }
   | { kind: "import" }
   | { kind: "order" }
+  | { kind: "list" }
   | null;
 type Filter = "alle" | "print" | "infinite" | "gelesen";
 
@@ -171,8 +172,9 @@ export function StapelList({ wide, sel, onSelect }: { wide: boolean; sel: Stapel
 
 /** The whole plan, evening by evening, and what has no date yet. */
 function StapelOrder({ sel, onSelect }: { sel: StapelSel; onSelect: (s: StapelSel) => void }) {
-  const { data, plan, today, items, stalled, eventOf } = useStore();
+  const { data, plan, today, items, stalled, eventOf, list: reading } = useStore();
   if (!data) return null;
+  const added = reading.filter((e) => e.added).length;
   const byId = new Map(items.map((i) => [i.issue.id, i]));
   const evenings = plan.filter((e) => e.entries.length > 0);
   const total = evenings.reduce((n, e) => n + e.entries.length, 0);
@@ -185,11 +187,19 @@ function StapelOrder({ sel, onSelect }: { sel: StapelSel; onSelect: (s: StapelSe
         <span className="mut" style={{ fontSize: 14 }}>
           {total === 0 ? "Nichts geplant." : `${total} ${total === 1 ? "Heft" : "Hefte"}, ${data.settings.max_per_evening} pro Abend${last ? `, bis ${dayLabel(last)}` : ""}`}
         </span>
-        <button type="button" className={`btn ${sel?.kind === "order" ? "solid" : ""}`} style={{ minHeight: 40, fontSize: 14, display: "inline-flex", alignItems: "center", gap: 8 }}
-          aria-pressed={sel?.kind === "order"} onClick={() => onSelect({ kind: "order" })}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" aria-hidden="true"><path d="M7 4v16M7 4l-3 3M7 4l3 3M17 20V4M17 20l-3-3M17 20l3-3" /></svg>
-          Serien ordnen
-        </button>
+        <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button type="button" className={`btn ${sel?.kind === "list" ? "solid" : ""}`} style={{ minHeight: 40, fontSize: 14, display: "inline-flex", alignItems: "center", gap: 8 }}
+            aria-pressed={sel?.kind === "list"} onClick={() => onSelect({ kind: "list" })}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" aria-hidden="true"><path d="M9 6h12M9 12h12M9 18h12M4 5v2M4 11v2M4 17v2" /></svg>
+            Hefte ordnen
+            {added > 0 && <span className="stk" style={{ fontSize: 12, padding: "1px 5px" }}>{added} NEU</span>}
+          </button>
+          <button type="button" className={`btn ${sel?.kind === "order" ? "solid" : ""}`} style={{ minHeight: 40, fontSize: 14, display: "inline-flex", alignItems: "center", gap: 8 }}
+            aria-pressed={sel?.kind === "order"} onClick={() => onSelect({ kind: "order" })}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" aria-hidden="true"><path d="M7 4v16M7 4l-3 3M7 4l3 3M17 20V4M17 20l-3-3M17 20l3-3" /></svg>
+            Serien ordnen
+          </button>
+        </span>
       </div>
       {evenings.length > 0 && (
         <section className="order" aria-label="Lesereihenfolge">
@@ -213,7 +223,7 @@ function StapelOrder({ sel, onSelect }: { sel: StapelSel; onSelect: (s: StapelSe
                     <span className="runs">
                       <EventTags issues={list.map((i) => i.issue)} marks={eventOf} />
                       {runsLabel(list)}
-                      {e.entries.some((x) => x.pinned) && <span className="fest">FEST</span>}
+                      {e.entries.some((x) => x.pinned) && <span className="fest">VON HAND</span>}
                     </span>
                   </div>
                 </div>

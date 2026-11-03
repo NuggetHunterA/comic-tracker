@@ -1,7 +1,10 @@
 // Builds the reading plan. Pure: everything it needs comes in as arguments.
 //
-// Rules (from the concept):
-// - Only readable issues are planned; unread ones roll over to the next evening.
+// The plan is a saved reading list, read top to bottom. It is sorted by the
+// rules only when the reader asks for it or changes the rules (series ranking,
+// events); reading an issue never reorders it.
+//
+// Sort rules:
 // - Old pile first, then everything else.
 // - A series is read in number order. Events (reading orders the reader keeps
 //   across series) are read in one go, in event order; the plan switches
@@ -12,15 +15,12 @@
 //   order, the rest by date. Series marked "whole" (above the line) are read
 //   to the end before the others take turns; an event inside one is still read
 //   in one go where the series reaches it. Old pile first still holds.
-// - A started event (one of its issues read) comes first every evening, before
-//   the old pile, as far as its issues are readable. At an issue that is not
-//   readable yet it pauses, and the rest of the plan goes on as usual.
-// - Pinned entries stay where the reader put them. A pin whose evening has
-//   passed unread no longer counts; the issue goes back into the order.
-//   Later issues of a pinned issue's series are not read before its evening.
-// - Pinning an event issue starts the event there from its first open issue;
-//   the later issues follow: same evening if there is room, otherwise first
-//   thing on the next evenings.
+// - A started event (one of its issues read) goes first.
+// - Issues moved by hand keep their place.
+//
+// Between sorts, new issues are slotted in next to their series or event and
+// nothing else moves. Evenings take the list in order, as far as issues are
+// readable; unread ones roll over to the next evening.
 import { addDays } from "./dates";
 import type { Format } from "./types";
 
@@ -47,14 +47,9 @@ export interface SeriesOrder {
 
 const NO_ORDER: SeriesOrder = { ranked: [], whole: new Set() };
 
-export interface Pin {
-  issueId: number;
-  evening: string;
-  slot: number;
-}
-
 export interface Evening {
   date: string;
+  /** pinned: moved to its place in the list by hand. */
   entries: { issueId: number; pinned: boolean }[];
 }
 
@@ -146,155 +141,130 @@ function eventMembers(issues: PlanIssue[]): Map<number, PlanIssue[]> {
   return out;
 }
 
-export function buildPlan(opts: {
-  issues: PlanIssue[];
-  pins: Pin[];
-  today: string;
-  maxPerEvening: number;
+/** One place in the reading list. manual: moved there by hand; added: slotted in since the last sort. */
+export interface ListEntry {
+  issueId: number;
+  manual: boolean;
+  added: boolean;
+}
+
+/** What a full sort goes by. */
+export interface ListRules {
   blockSize?: number;
   order?: SeriesOrder;
   /** Started events (an issue already read), most urgent first. */
   startedEvents?: number[];
-}): Evening[] {
-  const { today, maxPerEvening } = opts;
-  const pins = eventHeadPins(opts.issues, opts.pins.filter((p) => p.evening >= today));
-  const pinned = new Set(pins.map((p) => p.issueId));
-  const pinsByDay = new Map<string, Pin[]>();
-  for (const p of pins) {
-    if (!pinsByDay.has(p.evening)) pinsByDay.set(p.evening, []);
-    pinsByDay.get(p.evening)!.push(p);
-  }
-  let followers = eventFollowers(opts.issues, pins, pinned);
-  const following = new Set(followers.map((f) => f.issue.id));
-  const members = eventMembers(opts.issues);
-  let started = (opts.startedEvents ?? []).flatMap((e) =>
-    (members.get(e) ?? []).filter((i) => !pinned.has(i.id) && !following.has(i.id)),
-  );
+}
+
+/**
+ * Sorts the whole list by the rules: started events first, then the reading
+ * queue. Entries moved by hand keep their place in the list.
+ */
+export function sortList(issues: PlanIssue[], rules: ListRules = {}, keep: ListEntry[] = []): ListEntry[] {
+  const open = new Set(issues.map((i) => i.id));
+  const manual = keep.map((e, k) => ({ e, k })).filter(({ e }) => e.manual && open.has(e.issueId));
+  const fixed = new Set(manual.map(({ e }) => e.issueId));
+  const members = eventMembers(issues);
+  const started = (rules.startedEvents ?? []).flatMap((e) => (members.get(e) ?? []).filter((i) => !fixed.has(i.id)));
   const early = new Set(started.map((i) => i.id));
-  let queue = readingQueue(
-    opts.issues.filter((i) => !pinned.has(i.id) && !following.has(i.id) && !early.has(i.id)),
-    opts.blockSize,
-    opts.order,
-  );
-  const lastPinDay = [...pinsByDay.keys()].sort().pop() ?? today;
-  const notBefore = notBeforePins(opts.issues, pins, pinned);
-
-  const evenings: Evening[] = [];
-  for (let d = 0; d <= HORIZON_DAYS; d++) {
-    const date = addDays(today, d);
-    const dayPins = (pinsByDay.get(date) ?? []).sort((a, b) => a.slot - b.slot);
-    const entries = dayPins.map((p) => ({ issueId: p.issueId, pinned: true }));
-    const capacity = Math.max(0, maxPerEvening - entries.length);
-    const canRead = (i: PlanIssue) => (notBefore.get(i.id) ?? "") <= date && i.readableFrom !== null && i.readableFrom <= date;
-
-    const placed = new Set<number>();
-    const place = (i: PlanIssue) => {
-      placed.add(i.id);
-      entries.push({ issueId: i.id, pinned: false });
-    };
-    const blockedSeries = new Set<number>();
-    const blockedEvents = new Set<number>();
-    // A paused event holds back the later issues of its waiting issue's series.
-    const seriesFrom = new Map<number, PlanIssue>();
-    const blockedFollowEvents = new Set<number>();
-    for (const f of followers) {
-      if (placed.size >= capacity) break;
-      if (f.from > date || blockedFollowEvents.has(f.eventId)) continue;
-      if (canRead(f.issue)) place(f.issue);
-      else {
-        blockedFollowEvents.add(f.eventId);
-        blockedSeries.add(f.issue.seriesId);
-      }
-    }
-    for (const i of started) {
-      if (placed.size >= capacity) break;
-      if (blockedEvents.has(i.event!.id)) continue;
-      if (canRead(i)) place(i);
-      else {
-        blockedEvents.add(i.event!.id);
-        const was = seriesFrom.get(i.seriesId);
-        if (!was || byNumber(i, was) < 0) seriesFrom.set(i.seriesId, i);
-      }
-    }
-    for (const i of queue) {
-      if (placed.size >= capacity) break;
-      const from = seriesFrom.get(i.seriesId);
-      const blocked =
-        blockedSeries.has(i.seriesId) ||
-        (from !== undefined && byNumber(from, i) < 0) ||
-        (i.event !== null && blockedEvents.has(i.event.id));
-      if (!blocked && canRead(i)) place(i);
-      else {
-        blockedSeries.add(i.seriesId);
-        if (i.event) blockedEvents.add(i.event.id);
-      }
-    }
-    queue = queue.filter((i) => !placed.has(i.id));
-    followers = followers.filter((f) => !placed.has(f.issue.id));
-    started = started.filter((i) => !placed.has(i.id));
-    if (entries.length || d === 0) evenings.push({ date, entries });
-    const anyPlaceable = [...queue, ...started, ...followers.map((f) => f.issue)].some((i) => i.readableFrom !== null);
-    if (!anyPlaceable && date >= lastPinDay) break;
-  }
-  return evenings;
+  const rest = readingQueue(issues.filter((i) => !fixed.has(i.id) && !early.has(i.id)), rules.blockSize, rules.order);
+  const out: ListEntry[] = [...started, ...rest].map((i) => ({ issueId: i.id, manual: false, added: false }));
+  for (const { e, k } of manual) out.splice(Math.min(k, out.length), 0, { issueId: e.issueId, manual: true, added: false });
+  return out;
 }
 
 /**
- * A pin on an event issue starts the event there: the pin moves to the
- * event's first open issue, if that one is readable by then. The issue the
- * reader pinned follows it like the rest of the event.
+ * Brings the saved list up to date without moving what is already in it:
+ * issues no longer open drop out, new ones are slotted in (see slotFor).
+ * An empty list is sorted from scratch.
  */
-function eventHeadPins(issues: PlanIssue[], pins: Pin[]): Pin[] {
+export function syncList(stored: ListEntry[], issues: PlanIssue[], rules: ListRules = {}): ListEntry[] {
   const byId = new Map(issues.map((i) => [i.id, i]));
-  const members = eventMembers(issues);
-  const pinnedIds = new Set(pins.map((p) => p.issueId));
-  const done = new Set<number>();
-  const ordered = [...pins].sort((a, b) => a.evening.localeCompare(b.evening) || a.slot - b.slot);
-  return ordered.map((p) => {
-    const ev = byId.get(p.issueId)?.event;
-    if (!ev || done.has(ev.id)) return p;
-    done.add(ev.id);
-    const head = members.get(ev.id)!.find((i) => !pinnedIds.has(i.id) || i.id === p.issueId)!;
-    if (head.id === p.issueId || head.event!.position > ev.position) return p;
-    if (head.readableFrom === null || head.readableFrom > p.evening) return p;
-    return { ...p, issueId: head.id };
-  });
-}
-
-/**
- * Later issues of the events that pinned issues belong to, in pin order, then
- * event order. Each may not be read before the evening its pin is on.
- */
-function eventFollowers(issues: PlanIssue[], pins: Pin[], pinned: Set<number>) {
-  const byId = new Map(issues.map((i) => [i.id, i]));
-  const members = eventMembers(issues);
-  const out: { issue: PlanIssue; eventId: number; from: string }[] = [];
-  const taken = new Set<number>();
-  const ordered = [...pins].sort((a, b) => a.evening.localeCompare(b.evening) || a.slot - b.slot);
-  for (const p of ordered) {
-    const ev = byId.get(p.issueId)?.event;
-    if (!ev) continue;
-    for (const i of members.get(ev.id)!) {
-      if (pinned.has(i.id) || taken.has(i.id) || i.event!.position <= ev.position) continue;
-      taken.add(i.id);
-      out.push({ issue: i, eventId: ev.id, from: p.evening });
-    }
+  const out = stored.filter((e) => byId.has(e.issueId));
+  if (out.length === 0) return sortList(issues, rules);
+  const listed = new Set(out.map((e) => e.issueId));
+  for (const i of issues.filter((x) => !listed.has(x.id)).sort(byNumber)) {
+    out.splice(slotFor(out, i, byId), 0, { issueId: i.id, manual: false, added: true });
   }
   return out;
 }
 
-/** For unpinned issues: the latest evening an earlier issue of the same series is pinned to. */
-function notBeforePins(issues: PlanIssue[], pins: Pin[], pinned: Set<number>) {
-  const byId = new Map(issues.map((i) => [i.id, i]));
-  const out = new Map<number, string>();
-  for (const p of pins) {
-    const head = byId.get(p.issueId);
-    if (!head) continue;
-    for (const i of issues) {
-      if (pinned.has(i.id) || i.seriesId !== head.seriesId || byNumber(head, i) >= 0) continue;
-      if (p.evening > (out.get(i.id) ?? "")) out.set(i.id, p.evening);
-    }
+/**
+ * Where a new issue goes: next to its event's neighbours; else in number
+ * order among its series; else (old pile) after the old pile; else at the end.
+ */
+function slotFor(list: ListEntry[], i: PlanIssue, byId: Map<number, PlanIssue>): number {
+  const of = (e: ListEntry) => byId.get(e.issueId)!;
+  const first = (f: (x: PlanIssue) => boolean) => list.findIndex((e) => f(of(e)));
+  const last = (f: (x: PlanIssue) => boolean) => {
+    for (let k = list.length - 1; k >= 0; k--) if (f(of(list[k]))) return k;
+    return -1;
+  };
+  if (i.event) {
+    const ev = i.event;
+    const before = last((x) => x.event?.id === ev.id && x.event.position < ev.position);
+    if (before >= 0) return before + 1;
+    const after = first((x) => x.event?.id === ev.id);
+    if (after >= 0) return after;
   }
+  const later = first((x) => x.seriesId === i.seriesId && byNumber(i, x) < 0);
+  if (later >= 0) return later;
+  const earlier = last((x) => x.seriesId === i.seriesId);
+  if (earlier >= 0) return earlier + 1;
+  if (i.oldPile) {
+    const fresh = first((x) => !x.oldPile);
+    if (fresh >= 0) return fresh;
+  }
+  return list.length;
+}
+
+/**
+ * Lays the list out on evenings, top to bottom, up to maxPerEvening each.
+ * An issue that is not readable yet waits, and so do the issues after it in
+ * its series and its event; the rest of the list goes on. Issues read today
+ * count toward tonight, so nothing moves up when one is read.
+ */
+export function planEvenings(opts: {
+  list: ListEntry[];
+  issues: PlanIssue[];
+  today: string;
+  maxPerEvening: number;
+  readToday?: number;
+}): Evening[] {
+  const { today, maxPerEvening } = opts;
+  const byId = new Map(opts.issues.map((i) => [i.id, i]));
+  let rest = opts.list.filter((e) => byId.has(e.issueId));
+  const evenings: Evening[] = [];
+  for (let d = 0; d <= HORIZON_DAYS; d++) {
+    const date = addDays(today, d);
+    const capacity = Math.max(0, maxPerEvening - (d === 0 ? opts.readToday ?? 0 : 0));
+    const entries: Evening["entries"] = [];
+    const placed = new Set<number>();
+    const blockedSeries = new Set<number>();
+    const blockedEvents = new Set<number>();
+    for (const e of rest) {
+      if (entries.length >= capacity) break;
+      const i = byId.get(e.issueId)!;
+      const blocked = blockedSeries.has(i.seriesId) || (i.event !== null && blockedEvents.has(i.event.id));
+      if (!blocked && i.readableFrom !== null && i.readableFrom <= date) {
+        entries.push({ issueId: i.id, pinned: e.manual });
+        placed.add(i.id);
+      } else {
+        blockedSeries.add(i.seriesId);
+        if (i.event) blockedEvents.add(i.event.id);
+      }
+    }
+    rest = rest.filter((e) => !placed.has(e.issueId));
+    if (entries.length || d === 0) evenings.push({ date, entries });
+    if (!rest.some((e) => byId.get(e.issueId)!.readableFrom !== null)) break;
+  }
+  return evenings;
+}
+
+/** Moves one issue to a place in the list; it stays there through later sorts. */
+export function moveInList(list: ListEntry[], issueId: number, to: number): ListEntry[] {
+  const out = list.filter((e) => e.issueId !== issueId);
+  out.splice(Math.max(0, Math.min(to, out.length)), 0, { issueId, manual: true, added: false });
   return out;
 }
 

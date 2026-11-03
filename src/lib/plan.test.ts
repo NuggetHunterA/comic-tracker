@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPlan, readableFrom, readingQueue, stalledSeries, type PlanIssue } from "./plan";
+import { moveInList, planEvenings, readableFrom, readingQueue, sortList, stalledSeries, syncList, type Evening, type ListEntry, type PlanIssue } from "./plan";
 
 const TODAY = "2026-10-29";
 
@@ -115,35 +115,28 @@ describe("readingQueue", () => {
   });
 });
 
-describe("buildPlan", () => {
+type Rules = Parameters<typeof sortList>[1];
+const plan = (issues: PlanIssue[], rules: Rules = {}, readToday = 0) =>
+  planEvenings({ list: sortList(issues, rules), issues, today: TODAY, maxPerEvening: 3, readToday });
+const days = (evenings: Evening[]) => evenings.map((e) => [e.date, e.entries.map((x) => x.issueId)]);
+const ids = (list: ListEntry[]) => list.map((e) => e.issueId);
+
+describe("planEvenings", () => {
   it("fills evenings up to the maximum and rolls on", () => {
     const issues = [1, 2, 3, 4, 5].map((n) => issue(n, 10, n));
-    const plan = buildPlan({ issues, pins: [], today: TODAY, maxPerEvening: 3 });
-    expect(plan.map((e) => [e.date, e.entries.map((x) => x.issueId)])).toEqual([
+    expect(days(plan(issues))).toEqual([
       ["2026-10-29", [1, 2, 3]],
       ["2026-10-30", [4, 5]],
     ]);
   });
 
-  it("keeps pins, drops past pins and counts pins toward the maximum", () => {
-    const issues = [1, 2, 3, 4].map((n) => issue(n, 10, n));
-    const plan = buildPlan({
-      issues,
-      pins: [
-        { issueId: 4, evening: "2026-10-20", slot: 1 },
-        { issueId: 1, evening: "2026-10-30", slot: 1 },
-      ],
-      today: TODAY,
-      maxPerEvening: 3,
-    });
-    // The past pin on #4 is gone; #2 to #4 wait for the pinned #1 tomorrow.
-    expect(plan[0]).toEqual({ date: TODAY, entries: [] });
-    expect(plan[1].entries).toEqual([
-      { issueId: 1, pinned: true },
-      { issueId: 2, pinned: false },
-      { issueId: 3, pinned: false },
+  it("counts issues read today toward tonight, so nothing moves up", () => {
+    const issues = [2, 3, 4, 5].map((n) => issue(n, 10, n));
+    expect(days(plan(issues, {}, 1))).toEqual([
+      ["2026-10-29", [2, 3]],
+      ["2026-10-30", [4, 5]],
     ]);
-    expect(plan[2].entries).toEqual([{ issueId: 4, pinned: false }]);
+    expect(days(plan(issues, {}, 3))[0]).toEqual(["2026-10-29", []]);
   });
 
   it("waits for Infinite dates without skipping ahead in a series", () => {
@@ -152,83 +145,34 @@ describe("buildPlan", () => {
       issue(2, 10, 2, { readableFrom: TODAY }),
       issue(3, 20, 1, { readableFrom: TODAY, storeDate: "2025-01-01" }),
     ];
-    const plan = buildPlan({ issues, pins: [], today: TODAY, maxPerEvening: 3 });
-    expect(plan.map((e) => [e.date, e.entries.map((x) => x.issueId)])).toEqual([
+    expect(days(plan(issues))).toEqual([
       ["2026-10-29", [3]],
       ["2026-10-31", [1, 2]],
     ]);
   });
 
   it("never plans issues that are not readable", () => {
-    const plan = buildPlan({ issues: [issue(1, 10, 1, { readableFrom: null })], pins: [], today: TODAY, maxPerEvening: 3 });
-    expect(plan).toEqual([{ date: TODAY, entries: [] }]);
+    expect(plan([issue(1, 10, 1, { readableFrom: null })])).toEqual([{ date: TODAY, entries: [] }]);
   });
 
-  describe("pinned event issues", () => {
-    const arc = (pos: number) => ({ event: { id: 7, position: pos } });
-    const days = (plan: ReturnType<typeof buildPlan>) => plan.map((e) => [e.date, e.entries.map((x) => x.issueId)]);
-
-    it("starts the event at its first open part and pulls the rest along", () => {
-      const issues = [
-        issue(1, 20, 1, { storeDate: "2023-01-01" }),
-        issue(2, 20, 2, { storeDate: "2023-01-01" }),
-        issue(11, 10, 1, arc(1)),
-        issue(12, 10, 2, arc(2)),
-        issue(13, 10, 3, arc(3)),
-      ];
-      const plan = buildPlan({ issues, pins: [{ issueId: 12, evening: TODAY, slot: 1 }], today: TODAY, maxPerEvening: 3 });
-      expect(days(plan)).toEqual([
-        ["2026-10-29", [11, 12, 13]],
-        ["2026-10-30", [1, 2]],
-      ]);
-    });
-
-    it("puts parts that do not fit first on the next evenings", () => {
-      const issues = [
-        issue(1, 20, 1, { storeDate: "2023-01-01" }),
-        ...[1, 2, 3, 4, 5].map((n) => issue(10 + n, 10, n, arc(n))),
-      ];
-      const plan = buildPlan({ issues, pins: [{ issueId: 11, evening: TODAY, slot: 1 }], today: TODAY, maxPerEvening: 2 });
-      expect(days(plan)).toEqual([
-        ["2026-10-29", [11, 12]],
-        ["2026-10-30", [13, 14]],
-        ["2026-10-31", [15, 1]],
-      ]);
-    });
-
-    it("does not read later parts before a pin on a later evening", () => {
-      const issues = [1, 2, 3].map((n) => issue(10 + n, 10, n, arc(n)));
-      const plan = buildPlan({ issues, pins: [{ issueId: 12, evening: "2026-10-31", slot: 1 }], today: TODAY, maxPerEvening: 3 });
-      expect(days(plan)).toEqual([
-        ["2026-10-29", []],
-        ["2026-10-31", [11, 12, 13]],
-      ]);
-    });
-
-    it("waits for an unreadable part and keeps event order", () => {
-      const issues = [
-        issue(11, 10, 1, arc(1)),
-        issue(12, 10, 2, { ...arc(2), readableFrom: "2026-10-30" }),
-        issue(13, 10, 3, arc(3)),
-      ];
-      const plan = buildPlan({ issues, pins: [{ issueId: 11, evening: TODAY, slot: 1 }], today: TODAY, maxPerEvening: 3 });
-      expect(days(plan)).toEqual([
-        ["2026-10-29", [11]],
-        ["2026-10-30", [12, 13]],
-      ]);
-    });
+  it("marks entries moved by hand", () => {
+    const issues = [1, 2, 3].map((n) => issue(n, 10, n));
+    const list = moveInList(sortList(issues), 3, 0);
+    expect(planEvenings({ list, issues, today: TODAY, maxPerEvening: 3 })[0].entries).toEqual([
+      { issueId: 3, pinned: true },
+      { issueId: 1, pinned: false },
+      { issueId: 2, pinned: false },
+    ]);
   });
 
   describe("started events", () => {
     const ev = (pos: number) => ({ event: { id: 7, position: pos } });
-    const days = (plan: ReturnType<typeof buildPlan>) => plan.map((e) => [e.date, e.entries.map((x) => x.issueId)]);
     const oldPile = [1, 2, 3, 4, 5, 6].map((n) => issue(n, 30, n, { oldPile: true, storeDate: "2020-01-01" }));
 
     it("keep the rest of the event at the front, before the old pile", () => {
       // Parts 1 to 3 were read yesterday; 4 to 6 come from three series.
       const issues = [...oldPile, issue(14, 10, 4, ev(4)), issue(15, 20, 9, ev(5)), issue(16, 10, 5, ev(6))];
-      const plan = buildPlan({ issues, pins: [], today: TODAY, maxPerEvening: 3, startedEvents: [7] });
-      expect(days(plan).slice(0, 2)).toEqual([
+      expect(days(plan(issues, { startedEvents: [7] })).slice(0, 2)).toEqual([
         ["2026-10-29", [14, 15, 16]],
         ["2026-10-30", [1, 2, 3]],
       ]);
@@ -242,40 +186,87 @@ describe("buildPlan", () => {
         issue(16, 10, 5, ev(6)),
         issue(21, 20, 10),
       ];
-      const plan = buildPlan({ issues, pins: [], today: TODAY, maxPerEvening: 3, startedEvents: [7] });
-      expect(days(plan).slice(0, 3)).toEqual([
+      const p = plan(issues, { startedEvents: [7] });
+      expect(days(p).slice(0, 3)).toEqual([
         ["2026-10-29", [14, 1, 2]],
         ["2026-10-30", [3, 4, 5]],
         ["2026-10-31", [15, 16, 6]],
       ]);
       // Series 20 goes on after its waiting event issue, never before it.
-      expect(plan.findIndex((e) => e.entries.some((x) => x.issueId === 21))).toBeGreaterThan(2);
+      expect(p.findIndex((e) => e.entries.some((x) => x.issueId === 21))).toBeGreaterThan(2);
     });
 
     it("read an event issue before earlier open issues of its series", () => {
       const issues = [issue(28, 10, 128), issue(29, 10, 129), issue(33, 10, 133, ev(3)), issue(41, 20, 1, ev(4))];
-      const plan = buildPlan({ issues, pins: [], today: TODAY, maxPerEvening: 3, startedEvents: [7] });
-      expect(days(plan)).toEqual([
+      expect(days(plan(issues, { startedEvents: [7] }))).toEqual([
         ["2026-10-29", [33, 41, 28]],
         ["2026-10-30", [29]],
       ]);
     });
   });
+});
 
-  it("does not read later issues of a series before a pinned earlier one", () => {
-    const issues = [
-      issue(13, 10, 113),
-      issue(14, 10, 114),
-      issue(15, 10, 115),
-      issue(16, 10, 116),
-      issue(21, 20, 1, { storeDate: "2025-01-01" }),
-    ];
-    const plan = buildPlan({ issues, pins: [{ issueId: 13, evening: "2026-10-30", slot: 1 }], today: TODAY, maxPerEvening: 3 });
-    expect(plan.map((e) => [e.date, e.entries.map((x) => x.issueId)])).toEqual([
-      ["2026-10-29", [21]],
-      ["2026-10-30", [13, 14, 15]],
-      ["2026-10-31", [16]],
+describe("syncList", () => {
+  // Batman #153 to #160 and Nightwing #125 to #127, Nightwing older by date.
+  const batman = [153, 154, 155, 156, 157, 158, 159, 160].map((n, k) => issue(n, 1, n, { oldPile: true, storeDate: `2025-0${(k % 9) + 1}-05` }));
+  const nightwing = [125, 126, 127].map((n) => issue(n, 2, n, { oldPile: true, storeDate: "2025-01-20" }));
+
+  it("does not reshuffle when an issue is read", () => {
+    const issues = [...batman, ...nightwing];
+    const list = sortList(issues);
+    expect(ids(list).slice(0, 3)).toEqual([153, 154, 155]);
+    // Batman #153 read: the rest of the list stays as it was.
+    const after = syncList(list, issues.filter((i) => i.id !== 153));
+    expect(ids(after)).toEqual(ids(list).slice(1));
+    expect(days(planEvenings({ list: after, issues, today: TODAY, maxPerEvening: 3, readToday: 1 }))[0]).toEqual(["2026-10-29", [154, 155]]);
+  });
+
+  it("sorts an empty list from scratch", () => {
+    const issues = [...batman, ...nightwing];
+    expect(syncList([], issues)).toEqual(sortList(issues));
+  });
+
+  it("slots a new issue in after its series without moving the rest", () => {
+    const issues = [issue(1, 10, 1), issue(2, 10, 2), issue(3, 20, 1), issue(4, 20, 2)];
+    const list = [1, 3, 2, 4].map((issueId) => ({ issueId, manual: false, added: false }));
+    const fresh = [...issues, issue(5, 10, 3)];
+    expect(syncList(list, fresh)).toEqual([
+      { issueId: 1, manual: false, added: false },
+      { issueId: 3, manual: false, added: false },
+      { issueId: 2, manual: false, added: false },
+      { issueId: 5, manual: false, added: true },
+      { issueId: 4, manual: false, added: false },
     ]);
+  });
+
+  it("slots an earlier number in before the later ones of its series", () => {
+    const issues = [issue(2, 10, 2), issue(3, 10, 3), issue(9, 20, 1)];
+    const list = [9, 2, 3].map((issueId) => ({ issueId, manual: false, added: false }));
+    expect(ids(syncList(list, [...issues, issue(1, 10, 1)]))).toEqual([9, 1, 2, 3]);
+  });
+
+  it("slots a new event issue in next to its event", () => {
+    const ev = (pos: number) => ({ event: { id: 7, position: pos } });
+    const issues = [issue(1, 10, 1, ev(1)), issue(2, 20, 1, ev(3)), issue(3, 30, 1)];
+    const list = [1, 2, 3].map((issueId) => ({ issueId, manual: false, added: false }));
+    expect(ids(syncList(list, [...issues, issue(4, 40, 1, ev(2))]))).toEqual([1, 4, 2, 3]);
+  });
+
+  it("puts a new series at the end, or after the old pile when it is old pile", () => {
+    const issues = [issue(1, 10, 1, { oldPile: true }), issue(2, 20, 1)];
+    const list = [1, 2].map((issueId) => ({ issueId, manual: false, added: false }));
+    expect(ids(syncList(list, [...issues, issue(3, 30, 1)]))).toEqual([1, 2, 3]);
+    expect(ids(syncList(list, [...issues, issue(3, 30, 1, { oldPile: true })]))).toEqual([1, 3, 2]);
+  });
+});
+
+describe("sortList", () => {
+  it("keeps entries moved by hand where they are", () => {
+    const issues = [1, 2, 3, 4].map((n) => issue(n, 10, n));
+    const moved = moveInList(sortList(issues), 4, 1);
+    expect(ids(moved)).toEqual([1, 4, 2, 3]);
+    expect(ids(sortList(issues, {}, moved))).toEqual([1, 4, 2, 3]);
+    expect(sortList(issues, {}, moved).every((e) => !e.added)).toBe(true);
   });
 });
 

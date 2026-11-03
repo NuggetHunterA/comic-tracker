@@ -19,7 +19,9 @@ import { EventDetail } from "./components/EventDetail";
 import { SeriesOrder } from "./components/SeriesOrder";
 import { onOpenEvent, onOpenRun } from "./lib/nav";
 
-const WIDE = "(min-width: 700px)";
+// Two panes only when there is room for both: wide screens, or a Fold opened in landscape.
+// Held upright (3:4) the inner screen is too narrow for a second pane and gets the one-column layout.
+const WIDE = "(min-width: 1000px), (min-width: 700px) and (orientation: landscape)";
 
 function useWide() {
   const [wide, setWide] = useState(() => window.matchMedia(WIDE).matches);

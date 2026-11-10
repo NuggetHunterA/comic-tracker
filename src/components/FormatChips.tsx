@@ -1,10 +1,10 @@
 import { FORMAT_LABEL } from "../lib/labels";
 import type { Format } from "../lib/types";
 
-export function FormatChips({ value, onChange, allowInfinite = true }: { value: Format; onChange: (f: Format) => void; allowInfinite?: boolean }) {
-  // Without Infinite only Print is left, and a choice of one is no choice.
-  if (!allowInfinite) return null;
-  const formats: Format[] = ["infinite", "print"];
+/** The publisher's subscription (Infinite or Webtoon) or Print. Without a subscription there is nothing to pick. */
+export function FormatChips({ value, onChange, sub }: { value: Format; onChange: (f: Format) => void; sub: Format | null }) {
+  if (!sub) return null;
+  const formats: Format[] = [sub, "print"];
   return (
     <div className="joined" role="radiogroup" aria-label="Format">
       {formats.map((f) => (

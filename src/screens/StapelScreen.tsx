@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
+import { isSub } from "../lib/publisher";
 import { useStore, type Item } from "../lib/store";
 import { dayLabel, fromIso, shortDate } from "../lib/dates";
-import { issueTitle, runsLabel, seriesLong, seriesTitle } from "../lib/labels";
+import { FORMAT_LABEL, issueTitle, runsLabel, seriesLong, seriesTitle } from "../lib/labels";
 import { Cover } from "../components/Cover";
 import { useSeriesRange } from "../components/AllIssues";
 import { AllIssuesButton } from "./SerienScreen";
@@ -17,7 +18,7 @@ export type StapelSel =
   | { kind: "order" }
   | { kind: "list" }
   | null;
-type Filter = "alle" | "print" | "infinite" | "gelesen";
+type Filter = "alle" | "print" | "infinite" | "webtoon" | "gelesen";
 
 const isOpen = (i: Item) => i.ui.status === "pile" || i.ui.status === "expected";
 
@@ -36,7 +37,7 @@ export function useStapel(filter: Filter) {
       if (filter === "gelesen") return i.ui.status === "read";
       if (!isOpen(i)) return false;
       if (filter === "print") return i.ui.format === "print";
-      if (filter === "infinite") return i.ui.format === "infinite";
+      if (filter === "infinite" || filter === "webtoon") return i.ui.format === filter;
       return true;
     });
     const readable = shown.filter((i) => i.readable || i.ui.status === "read");
@@ -87,9 +88,9 @@ export function StapelList({ wide, sel, onSelect }: { wide: boolean; sel: Stapel
       </div>
       {view === "reihenfolge" ? <StapelOrder sel={sel} onSelect={onSelect} /> : <>
       <div className="chips" role="group" aria-label="Filter">
-        {(["alle", "print", "infinite", "gelesen"] as Filter[]).map((f) => (
+        {(["alle", "print", "infinite", "webtoon", "gelesen"] as Filter[]).map((f) => (
           <button key={f} type="button" className={`chip ${filter === f ? "on" : ""}`} aria-pressed={filter === f} onClick={() => setFilter(f)}>
-            {f === "alle" ? "Alle" : f === "print" ? "Print" : f === "infinite" ? "Infinite" : "Gelesen"}
+            {f === "alle" ? "Alle" : f === "gelesen" ? "Gelesen" : FORMAT_LABEL[f]}
           </button>
         ))}
       </div>
@@ -154,7 +155,7 @@ export function StapelList({ wide, sel, onSelect }: { wide: boolean; sel: Stapel
               <Cover issue={i.issue} readable={false} showNumber={false} style={{ width: 40, flex: "none" }} />
               <span style={{ flex: 1, display: "flex", flexDirection: "column" }}>
                 <strong style={{ fontSize: 16 }}>{issueTitle(i.issue, i.series)}</strong>
-                <span className="mut" style={{ fontSize: 14 }}>{i.ui.format === "infinite" ? "Infinite" : "Print · noch nicht gekauft"}</span>
+                <span className="mut" style={{ fontSize: 14 }}>{isSub(i.ui.format) ? FORMAT_LABEL[i.ui.format] : "Print · noch nicht gekauft"}</span>
               </span>
               {i.readableFrom ? <span className="stk">AB {shortDate(i.readableFrom)}</span> : i.issue.store_date ? <span className="d mut" style={{ fontSize: 13 }}>{shortDate(i.issue.store_date)}</span> : null}
             </button>
@@ -265,7 +266,7 @@ export function StapelSeries({ seriesId, onSelect }: { seriesId: number; onSelec
   const read = items.filter((i) => i.issue.series_id === seriesId && i.ui.status === "read").length;
   const series = data?.series.get(seriesId);
   const firstDay = plan.find((e) => e.entries.some((x) => list.some((i) => i.issue.id === x.issueId)))?.date;
-  const formats = [...new Set(list.map((i) => i.ui.format))].map((f) => (f === "infinite" ? "Infinite" : "Print"));
+  const formats = [...new Set(list.map((i) => i.ui.format))].map((f) => (f ? FORMAT_LABEL[f] : "Print"));
   return (
     <>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>

@@ -3,6 +3,7 @@ import { metron, supabase } from "../lib/supabase";
 import { useStore } from "../lib/store";
 import type { Format } from "../lib/types";
 import { FormatChips } from "./FormatChips";
+import { isSub, subFormatOf } from "../lib/publisher";
 import { SeriesSearch, type FoundSeries } from "./SeriesSearch";
 
 /** Old pile: pick a series and a number range; all of it counts as owned. */
@@ -12,6 +13,8 @@ export function ImportForm({ onDone }: { onDone: () => void }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [format, setFormat] = useState<Format>("print");
+  // A series without a subscription is always bought in print.
+  const fmt: Format = subFormatOf(series) && format !== "print" ? subFormatOf(series)! : "print";
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -37,9 +40,9 @@ export function ImportForm({ onDone }: { onDone: () => void }) {
       const rows = data.map((i) => ({
         issue_id: i.id,
         status: "pile",
-        format,
+        format: fmt,
         old_pile: true,
-        bought_on: format === "infinite" ? null : today,
+        bought_on: isSub(fmt) ? null : today,
       }));
       const { error: e2 } = await supabase.from("user_issues").upsert(rows, { onConflict: "user_id,issue_id", ignoreDuplicates: true });
       if (e2) throw e2;
@@ -66,7 +69,7 @@ export function ImportForm({ onDone }: { onDone: () => void }) {
             <label className="field" style={{ flex: 1 }}>Von #<input type="number" inputMode="numeric" value={from} onChange={(e) => setFrom(e.target.value)} required /></label>
             <label className="field" style={{ flex: 1 }}>Bis #<input type="number" inputMode="numeric" value={to} onChange={(e) => setTo(e.target.value)} /></label>
           </div>
-          <FormatChips value={format} onChange={setFormat} />
+          <FormatChips value={fmt} onChange={setFormat} sub={subFormatOf(series)} />
           <div style={{ display: "flex", gap: 10 }}>
             <button type="submit" className="btn solid" style={{ flex: 1 }} disabled={busy}>{busy ? "Trage ein …" : "Auf den Stapel"}</button>
             <button type="button" className="btn" onClick={onDone}>Fertig</button>

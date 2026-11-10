@@ -5,6 +5,7 @@ import { issueTitle, seriesLong } from "../lib/labels";
 import { MIN_RATED, gradeLabel, readingStats } from "../lib/stats";
 import { Cover } from "../components/Cover";
 import type { StapelSel } from "./StapelScreen";
+import { verlagOf } from "../lib/publisher";
 
 const DAYS = ["MO", "DI", "MI", "DO", "FR", "SA", "SO"];
 const hefte = (n: number) => (n === 1 ? "1 Heft" : `${n} Hefte`);
@@ -89,6 +90,8 @@ export function Bilanz({ sel, onSelect }: { sel: StapelSel; onSelect: (s: Stapel
         </div>
       </section>
 
+      <Verlage reads={reads} from={weeks[0].start} today={today} />
+
       <section aria-label="Zahlen" className="bz-kv">
         <div className="kv"><span>{monthLabel(today)}</span><span>{hefte(stats.month)}</span></div>
         <div className="kv"><span>{today.slice(0, 4)}</span><span>{hefte(stats.year)}</span></div>
@@ -170,5 +173,27 @@ export function Bilanz({ sel, onSelect }: { sel: StapelSel; onSelect: (s: Stapel
         </section>
       )}
     </div>
+  );
+}
+
+/** How the last twelve weeks split between DC and Marvel, as one bar. */
+function Verlage({ reads, from, today }: { reads: ReturnType<typeof useStore>["items"]; from: string; today: string }) {
+  const n = { dc: 0, marvel: 0, other: 0 };
+  for (const i of reads) if (i.ui.read_on && i.ui.read_on >= from && i.ui.read_on <= today) n[verlagOf(i.series)]++;
+  const total = n.dc + n.marvel + n.other;
+  if (total === 0) return null;
+  const pct = (x: number) => Math.round((x / total) * 100);
+  const parts = (["dc", "marvel", "other"] as const).filter((v) => n[v] > 0);
+  const label = { dc: "DC", marvel: "Marvel", other: "Andere" };
+  return (
+    <section aria-labelledby="bz-verlage">
+      <h2 id="bz-verlage" className="bz-h">DC und Marvel</h2>
+      <div className="bz-split" role="img" aria-label={parts.map((v) => `${label[v]}: ${hefte(n[v])}, ${pct(n[v])} Prozent`).join(", ")}>
+        {parts.map((v) => <i key={v} className={v} style={{ flexGrow: n[v] }} />)}
+      </div>
+      <div className="bz-splitkey d">
+        {parts.map((v) => <span key={v}><b>{label[v].toUpperCase()} {pct(n[v])} %</b> · {n[v]}</span>)}
+      </div>
+    </section>
   );
 }

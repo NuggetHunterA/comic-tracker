@@ -12,6 +12,32 @@ import { useRun } from "../components/useRun";
 import { AllIssues, useSeriesRange } from "../components/AllIssues";
 import { isFresh, markFresh } from "../lib/motion";
 import { NewEvent, Ticks } from "../components/EventDetail";
+import { defaultFormatOf, isSub, subFormatOf, verlagOf, type Verlag } from "../lib/publisher";
+
+type VerlagFilter = "alle" | Exclude<Verlag, "other">;
+const FILTER_KEY = "serien-verlag";
+const FILTERS: { id: VerlagFilter; label: string }[] = [{ id: "alle", label: "Alle" }, { id: "dc", label: "DC" }, { id: "marvel", label: "Marvel" }];
+
+/** The publisher filter over Meine Serien, remembered on this device. */
+function useVerlagFilter(): [VerlagFilter, (f: VerlagFilter) => void] {
+  const [f, setF] = useState<VerlagFilter>(() => {
+    try {
+      const v = localStorage.getItem(FILTER_KEY);
+      return v === "dc" || v === "marvel" ? v : "alle";
+    } catch {
+      return "alle";
+    }
+  });
+  const set = (v: VerlagFilter) => {
+    setF(v);
+    try {
+      localStorage.setItem(FILTER_KEY, v);
+    } catch {
+      /* private mode: forgotten next time */
+    }
+  };
+  return [f, set];
+}
 
 export type SerienSel =
   | { kind: "series"; id: number; found?: FoundSeries }
@@ -58,14 +84,21 @@ export function SerienList({ tab, setTab, sel, onSelect }: {
   const { data, items, events } = useStore();
   const { run, busy } = useRun();
   const [searching, setSearching] = useState(false);
+  const [verlag, setVerlag] = useVerlagFilter();
   const followedIds = useMemo(() => new Set(data?.followed.map((f) => f.series_id)), [data]);
   if (!data) return null;
-  const wishIssues = items.filter((i) => i.ui.status === "wishlist").sort((a, b) => (a.issue.store_date ?? "").localeCompare(b.issue.store_date ?? ""));
-  const wishCount = wishIssues.length + data.wishlistSeries.length;
+  const shows = (seriesId: number) => verlag === "alle" || verlagOf(data.series.get(seriesId)) === verlag;
+  // An event belongs to the publishers of its issues; an empty one shows everywhere.
+  const showsEvent = (v: EventView) => verlag === "alle" || v.order.length === 0 || v.order.some((i) => shows(i.series_id));
+  const followed = data.followed.filter((f) => shows(f.series_id));
+  const wishIssues = items.filter((i) => i.ui.status === "wishlist" && shows(i.issue.series_id)).sort((a, b) => (a.issue.store_date ?? "").localeCompare(b.issue.store_date ?? ""));
+  const wishSeries = data.wishlistSeries.filter(shows);
+  const wishCount = wishIssues.length + wishSeries.length;
   const openCount = (sid: number) => items.filter((i) => i.issue.series_id === sid && (i.ui.status === "pile" || i.ui.status === "expected")).length;
 
-  const done = events.filter(eventDone);
-  const open = events.filter((v) => !eventDone(v));
+  const shownEvents = events.filter(showsEvent);
+  const done = shownEvents.filter(eventDone);
+  const open = shownEvents.filter((v) => !eventDone(v));
   const eventRow = (v: EventView) => {
     const on = sel?.kind === "event" && sel.id === v.event.id;
     const next = v.order.find((i) => data.userIssues.get(i.id)?.status !== "read");
@@ -87,8 +120,15 @@ export function SerienList({ tab, setTab, sel, onSelect }: {
   return (
     <>
       <h1 style={{ fontSize: 44 }}>Meine Serien</h1>
+      <div className="chips" role="group" aria-label="Verlag">
+        {FILTERS.map((x) => (
+          <button key={x.id} type="button" className={`chip ${verlag === x.id ? "on" : ""}`} aria-pressed={verlag === x.id} onClick={() => setVerlag(x.id)}>
+            {x.id !== "alle" && <span className={`pubdot ${x.id}`} aria-hidden="true" />}{x.label}
+          </button>
+        ))}
+      </div>
       <div role="tablist" className="tabs">
-        <button type="button" role="tab" aria-selected={tab === "serien"} className={`seg ${tab === "serien" ? "on" : ""}`} onClick={() => setTab("serien")}>Serien · {data.followed.length}</button>
+        <button type="button" role="tab" aria-selected={tab === "serien"} className={`seg ${tab === "serien" ? "on" : ""}`} onClick={() => setTab("serien")}>Serien · {followed.length}</button>
         <button type="button" role="tab" aria-selected={tab === "wunsch"} className={`seg ${tab === "wunsch" ? "on" : ""}`} onClick={() => setTab("wunsch")}>Wunsch · {wishCount}</button>
         <button type="button" role="tab" aria-selected={tab === "events"} className={`seg ${tab === "events" ? "on" : ""}`} onClick={() => setTab("events")}>Events · {open.length}</button>
       </div>
@@ -96,10 +136,15 @@ export function SerienList({ tab, setTab, sel, onSelect }: {
       {tab === "events" ? (
         <section aria-label="Events" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <NewEvent onMade={(id) => onSelect({ kind: "event", id })} />
-          {events.length === 0 && (
+          {events.length === 0 ? (
             <div className="empty">
               <strong>Noch keine Events.</strong>
               <span className="mut">Ein Event ist eine Lesereihenfolge über mehrere Serien, etwa ein Crossover. Der Plan liest es am Stück, und sobald du angefangen hast, kommt es jeden Abend zuerst dran.</span>
+            </div>
+          ) : shownEvents.length === 0 && (
+            <div className="empty">
+              <strong>Keine {verlag === "dc" ? "DC" : "Marvel"}-Events.</strong>
+              <span className="mut">Unter „Alle“ siehst du deine anderen Events.</span>
             </div>
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -120,13 +165,18 @@ export function SerienList({ tab, setTab, sel, onSelect }: {
             picked={sel?.kind === "series" ? sel.id : undefined}
             onPick={(found) => onSelect({ kind: "series", id: found.id, found })} />
           {!searching && <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
-            {data.followed.length === 0 && (
+            {data.followed.length === 0 ? (
               <div className="empty">
                 <strong>Du folgst noch keiner Serie.</strong>
                 <span className="mut">Such oben nach einer Serie. Neue Hefte gefolgter Serien landen automatisch auf dem Stapel.</span>
               </div>
+            ) : followed.length === 0 && (
+              <div className="empty">
+                <strong>Du folgst keiner {verlag === "dc" ? "DC" : "Marvel"}-Serie.</strong>
+                <span className="mut">Such oben nach einer Serie oder schau unter „Alle“.</span>
+              </div>
             )}
-            {data.followed.map((f) => {
+            {followed.map((f) => {
               const s = data.series.get(f.series_id);
               const cover = items.find((i) => i.issue.series_id === f.series_id)?.issue;
               const on = (sel?.kind === "series" || sel?.kind === "all") && sel.id === f.series_id;
@@ -149,7 +199,7 @@ export function SerienList({ tab, setTab, sel, onSelect }: {
         <section aria-label="Wunschliste" style={{ display: "flex", flexDirection: "column" }}>
           {wishCount === 0 && (
             <div className="empty">
-              <strong>Die Wunschliste ist leer.</strong>
+              <strong>{verlag === "alle" ? "Die Wunschliste ist leer." : `Nichts von ${verlag === "dc" ? "DC" : "Marvel"} auf der Wunschliste.`}</strong>
               <span className="mut">Annuals und Specials deiner Serien landen hier, dazu alles, was du im Katalog vormerkst.</span>
             </div>
           )}
@@ -166,7 +216,7 @@ export function SerienList({ tab, setTab, sel, onSelect }: {
               </span>
             </button>
           ))}
-          {data.wishlistSeries.map((sid) => {
+          {wishSeries.map((sid) => {
             const s = data.series.get(sid);
             return (
               <div key={sid} className="sr" style={{ padding: "12px 0", borderBottom: "1px solid var(--rule)", cursor: "default" }}>
@@ -174,7 +224,7 @@ export function SerienList({ tab, setTab, sel, onSelect }: {
                   <span style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><strong style={{ fontSize: 17 }}>{seriesLong(s)}</strong><span className="tag">Serie</span></span>
                 </span>
                 <button type="button" className="btn" disabled={busy}
-                  onClick={() => run(() => actions.follow(sid, (s?.publisher ?? "").startsWith("DC") ? "infinite" : "print"))}>Folgen</button>
+                  onClick={() => run(() => actions.follow(sid, defaultFormatOf(s)))}>Folgen</button>
               </div>
             );
           })}
@@ -201,7 +251,8 @@ export function SeriesDetail({ seriesId, found, onSelect, onGone }: {
     .sort((a, b) => (a.issue.sort_number ?? 0) - (b.issue.sort_number ?? 0));
   const read = items.filter((i) => i.issue.series_id === seriesId && i.ui.status === "read").length;
   const relaunch = relaunches.find((r) => r.old === seriesId);
-  const isDC = (s?.publisher ?? "").startsWith("DC");
+  const isDC = verlagOf(s) === "dc";
+  const sub = subFormatOf(s);
 
   return (
     <>
@@ -231,8 +282,8 @@ export function SeriesDetail({ seriesId, found, onSelect, onGone }: {
       </div>
       <AllIssuesButton range={range} onClick={() => onSelect({ kind: "all", id: seriesId })} />
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: "auto" }}>
-        {isDC && <span style={{ fontWeight: 700, fontSize: 15 }}>Standardformat für neue Hefte</span>}
-        <FormatChips value={f.default_format} allowInfinite={isDC} onChange={(fmt) => run(() => actions.setDefaultFormat(seriesId, fmt))} />
+        {sub && <span style={{ fontWeight: 700, fontSize: 15 }}>Standardformat für neue Hefte</span>}
+        <FormatChips value={f.default_format} sub={sub} onChange={(fmt) => run(() => actions.setDefaultFormat(seriesId, fmt))} />
         <div style={{ display: "flex", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
           <button type="button" className="btn" disabled={busy} onClick={() => run(() => actions.setPaused(seriesId, !f.paused))}>{f.paused ? "Fortsetzen" : "Pausieren"}</button>
           <button type="button" className="btn" disabled={busy} onClick={() => run(async () => { await actions.unfollow(seriesId); onGone(); })}>Nicht mehr folgen</button>
@@ -300,13 +351,13 @@ function UnfollowedSeries({ seriesId, found, onSelect }: { seriesId: number; fou
   const { run, busy, error } = useRun();
   const s = data?.series.get(seriesId);
   const publisher = s?.publisher ?? found?.publisher ?? null;
-  const isDC = (publisher ?? "").startsWith("DC");
+  const fmt = defaultFormatOf({ publisher });
   const name = s ? seriesLong(s) : found ? (found.year_began && !found.name.includes(`(${found.year_began})`) ? `${found.name} (${found.year_began})` : found.name) : "Serie";
   const meta = [publisher, found?.issue_count != null ? `${found.issue_count} Hefte` : null, "Du folgst nicht"].filter(Boolean).join(" · ").toUpperCase();
 
   async function follow() {
     if (!data?.series.has(seriesId)) await metron({ action: "sync-series", series_id: seriesId });
-    await actions.follow(seriesId, isDC ? "infinite" : "print");
+    await actions.follow(seriesId, fmt);
     markFresh(`follow:${seriesId}`);
   }
 
@@ -317,7 +368,7 @@ function UnfollowedSeries({ seriesId, found, onSelect }: { seriesId: number; fou
         <span className="d mut" style={{ fontSize: 13 }}>{meta}</span>
       </div>
       <button type="button" className="btn hot" disabled={busy} onClick={() => run(follow)}>{busy ? "Folge …" : "Folgen"}</button>
-      <span className="mut" style={{ fontSize: 14, marginTop: -6 }}>{isDC ? "Ab dann landen neue Hefte als Infinite auf dem Stapel. Das Format kannst du danach ändern." : "Ab dann landen neue Hefte als Print auf dem Stapel."}</span>
+      <span className="mut" style={{ fontSize: 14, marginTop: -6 }}>{isSub(fmt) ? `Ab dann landen neue Hefte als ${FORMAT_LABEL[fmt]} auf dem Stapel. Das Format kannst du danach ändern.` : "Ab dann landen neue Hefte als Print auf dem Stapel."}</span>
       {error && <p role="alert" className="stk" style={{ whiteSpace: "normal" }}>{error}</p>}
       <AllIssues seriesId={seriesId} title={false}
         onSelect={(id) => onSelect({ kind: "issue", id, back: { kind: "series", id: seriesId, found } })} />

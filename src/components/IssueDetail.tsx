@@ -12,6 +12,8 @@ import { useRun } from "./useRun";
 import { RIP_MS, ripCover } from "../lib/rip";
 import { flyToPile, pressStamp, thud } from "../lib/motion";
 import { useInfiniteHref } from "../lib/infiniteLink";
+import { webtoonHref } from "../lib/webtoonLink";
+import { defaultFormatOf, isSub, subFormatOf } from "../lib/publisher";
 import { EVENT_COLORS, defaultShort, eventHex } from "../lib/events";
 import { openEvent, openRun } from "../lib/nav";
 
@@ -56,7 +58,7 @@ function useDesk() {
 function IssueDetailBody({ issueId, onClose }: Props) {
   const { data, today, plan, list, moveTo, release } = useStore();
   const { run, busy, error } = useRun();
-  const [pickFormat, setPickFormat] = useState<Format>("infinite");
+  const [picked, setPickFormat] = useState<Format | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const desk = useDesk();
   const showMore = moreOpen || desk;
@@ -68,23 +70,27 @@ function IssueDetailBody({ issueId, onClose }: Props) {
   const issue = data?.issues.get(issueId);
   const series = issue ? data?.series.get(issue.series_id) : undefined;
   const ui = data?.userIssues.get(issueId);
+  const sub = subFormatOf(series);
+  const delays = [data?.settings.infinite_delay_days ?? 30, data?.settings.webtoon_delay_days ?? 30] as const;
   // Look the issue page up only once it is out on Infinite; before that there is nothing to find.
-  const unlocked = !!data && !!issue && (readableFrom(issue.store_date, "infinite", null, data.settings.infinite_delay_days) ?? "9999") <= today;
+  const unlocked = !!data && !!issue && !!sub && (readableFrom(issue.store_date, sub, null, ...delays) ?? "9999") <= today;
   const infiniteHref = useInfiniteHref(issue, series, ui?.format === "infinite" && ui.status !== "read" && unlocked);
   if (!data) return null;
   if (!issue) return <p className="mut">Heft nicht gefunden.</p>;
   const title = issueTitle(issue, series);
-  const delay = data.settings.infinite_delay_days;
-  const from = ui ? readableFrom(issue.store_date, ui.format, ui.bought_on, delay) : null;
+  const from = ui ? readableFrom(issue.store_date, ui.format, ui.bought_on, ...delays) : null;
   const readable = !!from && from <= today;
-  const isDC = (series?.publisher ?? "").toLowerCase().startsWith("dc");
+  // A publisher with a subscription: its issues can be read there or bought in print.
+  const hasSub = !!sub;
+  const pickFormat = picked ?? defaultFormatOf(series);
+  const subDate = sub && issue.store_date ? readableFrom(issue.store_date, sub, null, ...delays) : null;
   const followed = data.followed.some((f) => f.series_id === issue.series_id);
   const followedFormat = data.followed.find((f) => f.series_id === issue.series_id)?.default_format;
   const cover = () => head.current?.querySelector<HTMLElement>(".cv");
   const toPile = () => {
     const cv = cover();
     if (cv) void flyToPile(cv);
-    return run(() => actions.addIssue(issueId, "pile", isDC ? pickFormat : "print"));
+    return run(() => actions.addIssue(issueId, "pile", pickFormat));
   };
   const markRead = async () => {
     // Tear the cover off, then tape it back on marked as read.
@@ -95,7 +101,7 @@ function IssueDetailBody({ issueId, onClose }: Props) {
   };
   const readEarlier = () => run(() => actions.markReadEarlier(issueId));
   const toWishlist = () => { setPinned(true); run(() => actions.addIssue(issueId, "wishlist", null)); };
-  const follow = async () => { if (await run(() => actions.follow(issue.series_id, isDC ? "infinite" : "print"))) setJustFollowed(true); };
+  const follow = async () => { if (await run(() => actions.follow(issue.series_id, defaultFormatOf(series)))) setJustFollowed(true); };
 
   // The toner bar: one pink main action, up to two slots, then Mehr. Everything else waits under Mehr.
   const fresh = !ui || ui.status === "dismissed";
@@ -115,9 +121,10 @@ function IssueDetailBody({ issueId, onClose }: Props) {
     cand.push({ icon: "x", label: "Streichen", title: "Von der Liste", onClick: () => run(async () => { await actions.dismissIssue(issueId); onClose?.(); }) });
   } else if (ui.status !== "read") {
     if (readable) go = { label: "Gelesen", onClick: markRead };
-    else if (ui.format !== "infinite" && !ui.bought_on) go = { label: "Gekauft", onClick: () => run(() => actions.setBought(issueId, today)) };
+    else if (!isSub(ui.format) && !ui.bought_on) go = { label: "Gekauft", onClick: () => run(() => actions.setBought(issueId, today)) };
     else if (from) wait = `AB ${shortDate(from)}`;
     if (ui.format === "infinite" && readable) cand.push({ icon: "out", label: "Infinite", title: "In Infinite öffnen", href: infiniteHref });
+    if (ui.format === "webtoon" && readable) cand.push({ icon: "out", label: "Webtoon", title: "In Webtoon öffnen", href: webtoonHref(issue, series) });
     if (readable && !ui.skip_plan) {
       const tomorrow = { icon: "next" as const, label: "Morgen", title: "Auf morgen", onClick: () => run(() => moveTo(issueId, afterTonight(plan, list, today, issueId))) };
       if (isTonight(plan, today, issueId)) cand.push(tomorrow);
@@ -137,13 +144,13 @@ function IssueDetailBody({ issueId, onClose }: Props) {
   more.unshift(...cand.slice(2).map((c) => ({ label: c.title, onClick: c.onClick! })));
   if (ui?.status === "read") more.push({ label: "Doch nicht gelesen", warn: true, onClick: () => run(() => (!ui.format && !ui.read_on ? actions.removeIssue(issueId) : actions.markUnread(issueId))) });
   const onPile = !!ui && ui.status !== "read" && ui.status !== "dismissed" && ui.status !== "wishlist";
-  if (onPile && ui.format !== "infinite" && ui.bought_on) more.push({ label: "Doch nicht gekauft", onClick: () => run(() => actions.setBought(issueId, null)) });
+  if (onPile && !isSub(ui.format) && ui.bought_on) more.push({ label: "Doch nicht gekauft", onClick: () => run(() => actions.setBought(issueId, null)) });
   if (onPile) more.push({ label: "Vom Stapel entfernen", warn: true, onClick: () => run(async () => { await actions.removeIssue(issueId); onClose?.(); }) });
   // Undoing and removing come last, after the everyday changes.
   const moreRow = (m: More) => (
     <button key={m.label} type="button" className={`mrow ${m.warn ? "warn" : ""}`} disabled={busy} onClick={m.onClick}><span>{m.label}</span><Chevron /></button>
   );
-  const moreCount = more.length + (hasRange ? 2 : 0) + (onPile && isDC ? 1 : 0) + 1;
+  const moreCount = more.length + (hasRange ? 2 : 0) + (onPile && hasSub ? 1 : 0) + 1;
 
   return (
     <div className="issue-detail">
@@ -165,11 +172,11 @@ function IssueDetailBody({ issueId, onClose }: Props) {
               <div className="kv"><span>ERSCHEINT</span><span>{dateLabel(issue.store_date, today)}</span></div>
             )}
             <WriterLine issueId={issueId} />
-            {isDC && issue.store_date && (!ui || (ui.format === "infinite" && ui.status !== "read")) && (
-              <div className="kv"><span>INFINITE</span>{addDays(issue.store_date, delay) <= today ? <span>Verfügbar</span> : <span><span className="stk">AB {shortDate(addDays(issue.store_date, delay))}</span></span>}</div>
+            {sub && subDate && (!ui || (ui.format === sub && ui.status !== "read")) && (
+              <div className="kv"><span>{sub === "infinite" ? "INFINITE" : "WEBTOON"}</span>{subDate <= today ? <span>Verfügbar</span> : <span><span className="stk">AB {shortDate(subDate)}</span></span>}</div>
             )}
             {ui && ui.format && (
-              <div className="kv"><span>FORMAT</span><span>{FORMAT_LABEL[ui.format]}{ui.old_pile ? " · Altbestand" : ""}{ui.format !== "infinite" ? (ui.bought_on ? ` · gekauft ${shortDate(ui.bought_on)}` : " · noch nicht gekauft") : ""}</span></div>
+              <div className="kv"><span>FORMAT</span><span>{FORMAT_LABEL[ui.format]}{ui.old_pile ? " · Altbestand" : ""}{!isSub(ui.format) ? (ui.bought_on ? ` · gekauft ${shortDate(ui.bought_on)}` : " · noch nicht gekauft") : ""}</span></div>
             )}
             <EventLine issueId={issueId} />
             {ui && <PlanLine issueId={issueId} plan={plan} today={today} />}
@@ -178,8 +185,8 @@ function IssueDetailBody({ issueId, onClose }: Props) {
         </div>
       </div>
 
-      {picking && isDC && (
-        <div className="readas"><span>LESEN ALS</span><FormatChips value={pickFormat} onChange={setPickFormat} /></div>
+      {picking && sub && (
+        <div className="readas"><span>LESEN ALS</span><FormatChips value={pickFormat} onChange={setPickFormat} sub={sub} /></div>
       )}
 
       {ui?.status === "read" && !desk && (
@@ -191,14 +198,14 @@ function IssueDetailBody({ issueId, onClose }: Props) {
       {showMore && moreCount > 0 && (
         <div className="morelist" role="group" aria-label="Mehr">
           {more.filter((m) => !m.warn).map(moreRow)}
-          {onPile && isDC && (
-            <div className="mrow"><span>Format</span><FormatChips value={ui.format ?? "print"} onChange={(f) => run(() => actions.setFormat(issueId, f))} /></div>
+          {onPile && sub && (
+            <div className="mrow"><span>Format</span><FormatChips value={ui.format ?? "print"} onChange={(f) => run(() => actions.setFormat(issueId, f))} sub={sub} /></div>
           )}
-          <div className="mrow pick"><EventPick issue={issue} isDC={isDC} /></div>
+          <div className="mrow pick"><EventPick issue={issue} /></div>
           {hasRange && (
             <>
               <RangeAction issue={issue} mode="read" />
-              <RangeAction issue={issue} mode="pile" format={followedFormat ?? (isDC ? "infinite" : "print")} />
+              <RangeAction issue={issue} mode="pile" format={followedFormat ?? defaultFormatOf(series)} />
             </>
           )}
           {more.filter((m) => m.warn).map(moreRow)}
@@ -312,14 +319,14 @@ function EventLine({ issueId }: { issueId: number }) {
 }
 
 /** "Zu Event hinzufügen": the events to pick from, or a new one. */
-function EventPick({ issue, isDC }: { issue: Issue; isDC: boolean }) {
+function EventPick({ issue }: { issue: Issue }) {
   const { data, events, eventOf } = useStore();
   const { run, busy } = useRun();
   const current = eventOf.get(issue.id)?.event.id;
   const [newName, setNewName] = useState("");
   if (!data) return null;
   const ui = data.userIssues.get(issue.id);
-  const format: Format = ui?.format ?? (isDC ? "infinite" : "print");
+  const format: Format = ui?.format ?? defaultFormatOf(data.series.get(issue.series_id));
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <span style={{ fontWeight: 700, fontSize: 14 }}>{current ? "Event" : "Zu Event hinzufügen"}</span>
@@ -401,7 +408,7 @@ function RangeAction({ issue, mode, format }: { issue: Issue; mode: "read" | "pi
       ) : mode === "read" ? (
         <p>Trägt {span} als gelesen ein, {todo.ids.length === 1 ? "das ist" : "das sind"} {count} ohne Lesedatum. Hefte auf dem Stapel bleiben, wo sie sind.</p>
       ) : (
-        <p>Legt {span} auf den Stapel, {todo.ids.length === 1 ? "das ist" : "das sind"} {count} als {format === "infinite" ? "Infinite" : "Print, noch nicht gekauft"}. Gelesene Hefte bleiben gelesen. Im Plan kommen sie nach deinem Altbestand dran.</p>
+        <p>Legt {span} auf den Stapel, {todo.ids.length === 1 ? "das ist" : "das sind"} {count} als {isSub(format) ? FORMAT_LABEL[format] : "Print, noch nicht gekauft"}. Gelesene Hefte bleiben gelesen. Im Plan kommen sie nach deinem Altbestand dran.</p>
       )}
       <div style={{ display: "flex", gap: 8 }}>
         {todo && todo.ids.length > 0 && (

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { defaultFormatOf } from "../lib/publisher";
 import { actions, useStore, type EventView } from "../lib/store";
 import { EVENT_COLORS, defaultShort, eventHex, seriesGaps } from "../lib/events";
 import { dayLabel, shortDate } from "../lib/dates";
@@ -59,7 +60,7 @@ export function EventDetail({ eventId, onGone }: { eventId: number; onGone: () =
 
   const formatFor = (i: Issue): Format => {
     const f = data.followed.find((x) => x.series_id === i.series_id)?.default_format;
-    return f ?? ((data.series.get(i.series_id)?.publisher ?? "").toLowerCase().startsWith("dc") ? "infinite" : "print");
+    return f ?? defaultFormatOf(data.series.get(i.series_id));
   };
   const toggle = (issueId: number) => {
     const issue = data.issues.get(issueId);

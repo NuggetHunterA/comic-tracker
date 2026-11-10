@@ -1,4 +1,4 @@
-export type Format = "print" | "infinite";
+export type Format = "print" | "infinite" | "webtoon";
 export type Status = "wishlist" | "expected" | "pile" | "read" | "dismissed";
 
 export interface Series {
@@ -70,6 +70,7 @@ export interface SeriesRank {
 
 export interface Settings {
   infinite_delay_days: number;
+  webtoon_delay_days: number;
   max_per_evening: number;
 }
 

@@ -7,7 +7,9 @@ import { useRun } from "../components/useRun";
 import { RIP_RELEASE_MS, ripCover, tapeOn } from "../lib/rip";
 import { eventHex } from "../lib/events";
 import type { EventMark } from "../lib/store";
-import type { Issue } from "../lib/types";
+import type { Issue, Series } from "../lib/types";
+import { FORMAT_LABEL } from "../lib/labels";
+import { isSub, verlagOf } from "../lib/publisher";
 
 const wait = (ms: number) => new Promise((done) => window.setTimeout(done, ms));
 
@@ -21,7 +23,7 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
     const tonight = plan.find((e) => e.date === today)?.entries.map((e) => resolve(e.issueId)) ?? [];
     const next = plan.filter((e) => e.date > today).slice(0, 6).map((e) => ({ date: e.date, list: e.entries.map((x) => resolve(x.issueId)) }));
     const soon = items
-      .filter((i) => (i.ui.status === "pile" || i.ui.status === "expected") && i.ui.format === "infinite" && i.readableFrom && i.readableFrom > today)
+      .filter((i) => (i.ui.status === "pile" || i.ui.status === "expected") && isSub(i.ui.format) && i.readableFrom && i.readableFrom > today)
       .sort((a, b) => a.readableFrom!.localeCompare(b.readableFrom!))[0];
     const pileCount = items.filter((i) => (i.ui.status === "pile" || i.ui.status === "expected") && i.readable).length;
     const readToday = items.filter((i) => i.ui.status === "read" && i.ui.read_on === today).length;
@@ -109,7 +111,7 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
             <div key={e.date} className="evening">
               <span className={`d ${k === next.length - 1 ? "mut" : ""}`}>{dayLabel(e.date)}</span>
               <span className={k === next.length - 1 ? "mut" : ""} style={{ fontSize: 16 }}>
-                <EventTags issues={e.list.map((x) => x.issue)} marks={eventOf} />{runsLabel(e.list)}
+                <PubDots list={e.list} /><EventTags issues={e.list.map((x) => x.issue)} marks={eventOf} />{runsLabel(e.list)}
               </span>
             </div>
           ))}
@@ -142,7 +144,7 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
         <button type="button" className="blackbar" onClick={() => onSelect(soon.issue.id)} style={{ border: "none", textAlign: "left", cursor: "pointer", marginTop: 4 }}>
           <Cover issue={soon.issue} readable={false} showNumber={false} />
           <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-            <span style={{ fontSize: 14, color: "var(--rule)" }}>Demnächst auf Infinite</span>
+            <span style={{ fontSize: 14, color: "var(--rule)" }}>Demnächst auf {FORMAT_LABEL[soon.ui.format!]}</span>
             <span style={{ fontWeight: 700, fontSize: 17 }}>{issueTitle(soon.issue, soon.series)}</span>
           </span>
           <span className="stk" style={{ transform: "rotate(2deg)" }}>AB {shortDate(soon.readableFrom!)}</span>
@@ -177,6 +179,12 @@ function Band({ marks, k }: { marks: (EventMark | undefined)[]; k: number }) {
   );
 }
 
+/** The evening's publisher as a coloured dot (two when it had to fill up with the other one). */
+function PubDots({ list }: { list: { series: Series | undefined }[] }) {
+  const vs = [...new Set(list.map((x) => verlagOf(x.series)))].filter((v) => v !== "other");
+  return <>{vs.map((v) => <span key={v} className={`pubdot ${v}`} role="img" aria-label={v === "dc" ? "DC" : "Marvel"} />)}</>;
+}
+
 /** "K.O. 6–7" in front of an evening that goes on with an event. */
 export function EventTags({ issues, marks }: { issues: Issue[]; marks: Map<number, EventMark> }) {
   const runs = new Map<number, { m: EventMark; from: number; to: number }>();
@@ -200,7 +208,7 @@ export function EventTags({ issues, marks }: { issues: Issue[]; marks: Map<numbe
 
 function waitReason(format: string | null): string {
   if (format === "print") return "ist nicht als gekauft markiert";
-  if (format === "infinite") return "hat noch kein Erscheinungsdatum";
+  if (format === "infinite" || format === "webtoon") return "hat noch kein Erscheinungsdatum";
   return "hat kein Format";
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moveInList, planEvenings, releaseInList, readableFrom, readingQueue, sortList, stalledSeries, syncList, type Evening, type ListEntry, type PlanIssue } from "./plan";
+import { alignToEvenings, moveInList, planEvenings, releaseInList, readableFrom, readingQueue, sortList, stalledSeries, syncList, type Evening, type ListEntry, type PlanIssue } from "./plan";
 
 const TODAY = "2026-10-29";
 
@@ -340,5 +340,27 @@ describe("stalledSeries", () => {
       issue(12, 20, 2, { readableFrom: null }),
     ]);
     expect(stalled.map((s) => [s.issue.id, s.behind])).toEqual([[2, 2]]);
+  });
+});
+
+describe("alignToEvenings", () => {
+  const dc = (id: number, sr: number, n: number, x: Partial<PlanIssue> = {}) => issue(id, sr, n, { publisher: "dc", ...x });
+  const mv = (id: number, sr: number, n: number, x: Partial<PlanIssue> = {}) => issue(id, sr, n, { publisher: "marvel", ...x });
+  const entries = (ids: number[]): ListEntry[] => ids.map((issueId) => ({ issueId, manual: false, added: false }));
+
+  it("puts an issue pulled forward to fill an evening next to that evening", () => {
+    // Armageddon #2 waits a day; Daredevil fills the Marvel evenings although it stands later in the list.
+    const issues = [mv(1, 20, 1), mv(2, 20, 2, { readableFrom: "2026-10-30" }), dc(3, 10, 1), dc(4, 10, 2), dc(5, 10, 3), mv(6, 30, 1), mv(7, 30, 2), mv(8, 30, 3)];
+    const list = entries([1, 2, 3, 4, 5, 6, 7, 8]);
+    const evenings = planEvenings({ list, issues, today: TODAY, maxPerEvening: 3 });
+    const aligned = alignToEvenings(list, evenings);
+    expect(ids(aligned)).toEqual([1, 6, 7, 2, 3, 8, 4, 5]);
+    expect(days(planEvenings({ list: aligned, issues, today: TODAY, maxPerEvening: 3 }))).toEqual(days(evenings));
+  });
+
+  it("keeps issues without a reading date after the issue they followed", () => {
+    const issues = [dc(1, 10, 1), dc(2, 10, 2, { readableFrom: null }), dc(3, 20, 1)];
+    const list = entries([1, 2, 3]);
+    expect(ids(alignToEvenings(list, planEvenings({ list, issues, today: TODAY, maxPerEvening: 3 })))).toEqual([1, 2, 3]);
   });
 });

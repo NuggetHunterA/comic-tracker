@@ -281,6 +281,33 @@ export function planEvenings(opts: {
   return evenings;
 }
 
+/**
+ * Rewrites a freshly sorted list in the order the evenings read it, so the list
+ * shows what the plan does: an issue pulled forward to fill an evening of its
+ * publisher stands next to the others of that evening. Issues no evening takes
+ * (no reading date yet) stay right after the issue they followed before.
+ */
+export function alignToEvenings(list: ListEntry[], evenings: Evening[]): ListEntry[] {
+  const byId = new Map(list.map((e) => [e.issueId, e]));
+  const out: ListEntry[] = [];
+  for (const ev of evenings) for (const x of ev.entries) {
+    const e = byId.get(x.issueId);
+    if (e) out.push(e);
+  }
+  const placed = new Set(out.map((e) => e.issueId));
+  list.forEach((e, k) => {
+    if (placed.has(e.issueId)) return;
+    let at = 0;
+    for (let j = k - 1; j >= 0; j--) {
+      const prev = out.findIndex((x) => x.issueId === list[j].issueId);
+      if (prev >= 0) { at = prev + 1; break; }
+    }
+    out.splice(at, 0, e);
+    placed.add(e.issueId);
+  });
+  return out;
+}
+
 /** Hands an issue moved by hand back to the rules: it goes where a new issue would go. */
 export function releaseInList(list: ListEntry[], issueId: number, issues: PlanIssue[]): ListEntry[] {
   const byId = new Map(issues.map((i) => [i.id, i]));

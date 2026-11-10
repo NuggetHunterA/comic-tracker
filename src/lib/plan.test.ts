@@ -26,6 +26,10 @@ describe("readableFrom", () => {
     expect(readableFrom("2026-11-26", "print", null, 30)).toBeNull();
     expect(readableFrom("2026-11-26", "print", "2026-11-28", 30)).toBe("2026-11-28");
   });
+  it("adds the Webtoon delay to the store date", () => {
+    expect(readableFrom("2026-11-26", "webtoon", null, 30, 90)).toBe("2027-02-24");
+    expect(readableFrom("2026-11-26", "webtoon", null, 30)).toBe("2026-12-26");
+  });
   it("has no date without a store date or format", () => {
     expect(readableFrom(null, "infinite", null, 30)).toBeNull();
     expect(readableFrom("2026-11-26", null, null, 30)).toBeNull();
@@ -163,6 +167,50 @@ describe("planEvenings", () => {
       { issueId: 1, pinned: false },
       { issueId: 2, pinned: false },
     ]);
+  });
+
+  describe("one publisher per evening", () => {
+    const dc = (id: number, s: number, n: number, x: Partial<PlanIssue> = {}) => issue(id, s, n, { publisher: "dc", ...x });
+    const mv = (id: number, s: number, n: number, x: Partial<PlanIssue> = {}) => issue(id, s, n, { publisher: "marvel", ...x });
+    const list = (ids: number[]): ListEntry[] => ids.map((issueId) => ({ issueId, manual: false, added: false }));
+
+    it("lets the first issue set the publisher and saves the other one for its own evening", () => {
+      const issues = [dc(1, 10, 1), mv(2, 20, 1), dc(3, 10, 2), dc(4, 10, 3), mv(5, 20, 2)];
+      expect(days(planEvenings({ list: list([1, 2, 3, 4, 5]), issues, today: TODAY, maxPerEvening: 3 }))).toEqual([
+        ["2026-10-29", [1, 3, 4]],
+        ["2026-10-30", [2, 5]],
+      ]);
+    });
+
+    it("fills up with the other publisher when nothing of this one is left to read", () => {
+      const issues = [dc(1, 10, 1), mv(2, 20, 1), mv(3, 20, 2), dc(4, 10, 2, { readableFrom: "2026-11-05" })];
+      expect(days(planEvenings({ list: list([1, 2, 3, 4]), issues, today: TODAY, maxPerEvening: 3 }))[0]).toEqual(["2026-10-29", [1, 2, 3]]);
+    });
+
+    it("keeps an issue moved by hand where it is, without changing the evening's publisher", () => {
+      const issues = [mv(2, 20, 1), dc(1, 10, 1), dc(3, 10, 2), mv(5, 20, 2)];
+      const l: ListEntry[] = [{ issueId: 2, manual: true, added: false }, ...list([1, 3, 5])];
+      expect(planEvenings({ list: l, issues, today: TODAY, maxPerEvening: 3 })[0].entries).toEqual([
+        { issueId: 2, pinned: true },
+        { issueId: 1, pinned: false },
+        { issueId: 3, pinned: false },
+      ]);
+    });
+
+    it("keeps tonight to what was read today", () => {
+      const issues = [dc(1, 10, 1), mv(2, 20, 1), mv(3, 20, 2), dc(4, 10, 2)];
+      expect(days(planEvenings({ list: list([1, 2, 3, 4]), issues, today: TODAY, maxPerEvening: 3, readToday: 1, readTodayPublisher: "marvel" }))[0])
+        .toEqual(["2026-10-29", [2, 3]]);
+    });
+
+    it("does not read past an event part it saves for later", () => {
+      const ev = (pos: number) => ({ event: { id: 7, position: pos } });
+      const issues = [dc(1, 10, 1), mv(2, 20, 1, ev(1)), dc(3, 30, 1, ev(2)), dc(4, 10, 2)];
+      expect(days(planEvenings({ list: list([1, 2, 3, 4]), issues, today: TODAY, maxPerEvening: 3 }))).toEqual([
+        ["2026-10-29", [1, 2, 4]],
+        ["2026-10-30", [3]],
+      ]);
+    });
   });
 
   describe("started events", () => {

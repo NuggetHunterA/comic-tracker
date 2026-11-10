@@ -9,7 +9,8 @@ const RUN_BUDGET_MS = 110_000;
 const CATALOG_MAX_AGE_H = 20;
 const SERIES_MAX_AGE_D = 7;
 const WRITERS_PER_RUN = 15;
-const PUBLISHERS: Record<string, string> = { DC: "DC Comics", Marvel: "Marvel", Image: "Image" };
+// Image left the catalog; its series can still be found and followed through the search.
+const PUBLISHERS: Record<string, string> = { DC: "DC Comics", Marvel: "Marvel" };
 
 const cors = {
   "Access-Control-Allow-Origin": "*",

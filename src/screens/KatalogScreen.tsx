@@ -9,8 +9,8 @@ import { ConnectFlyer } from "../components/ConnectFlyer";
 import { useConnect } from "../lib/connect";
 import { infiniteHref } from "../lib/infiniteLink";
 
-export type Verlag = "dc" | "other";
-const PUBLISHERS: Record<Verlag, string[]> = { dc: ["DC Comics"], other: ["Marvel", "Image"] };
+type Tab = "dc" | "marvel";
+const PUBLISHERS: Record<Tab, string[]> = { dc: ["DC Comics"], marvel: ["Marvel"] };
 
 type Row = Issue & { series: Series };
 
@@ -21,7 +21,7 @@ export function KatalogList({ month, setMonth, selected, onSelect }: {
   onSelect: (id: number) => void;
 }) {
   const { data, today, remember } = useStore();
-  const [verlag, setVerlag] = useState<Verlag>("dc");
+  const [verlag, setVerlag] = useState<Tab>("dc");
   const [mine, setMine] = useState(false);
   const [firsts, setFirsts] = useState(false);
   const [rows, setRows] = useState<Row[] | null>(null);
@@ -92,7 +92,7 @@ export function KatalogList({ month, setMonth, selected, onSelect }: {
       </div>
       <div role="tablist" className="tabs">
         <button type="button" role="tab" aria-selected={verlag === "dc"} className={`seg ${verlag === "dc" ? "on" : ""}`} onClick={() => setVerlag("dc")}>DC</button>
-        <button type="button" role="tab" aria-selected={verlag === "other"} className={`seg ${verlag === "other" ? "on" : ""}`} onClick={() => setVerlag("other")}>Marvel + Image</button>
+        <button type="button" role="tab" aria-selected={verlag === "marvel"} className={`seg ${verlag === "marvel" ? "on" : ""}`} onClick={() => setVerlag("marvel")}>Marvel</button>
       </div>
       {verlag === "dc" && connect && (
         <ConnectFlyer
@@ -123,7 +123,7 @@ export function KatalogList({ month, setMonth, selected, onSelect }: {
             </div>
             {w.rows.map((r) => (
               <button key={r.id} type="button" className={`tile ${selected === r.id ? "sel" : ""}`} onClick={() => onSelect(r.id)}>
-                <Cover issue={r} showNumber={false} tape={followed.has(r.series_id) ? "FOLGE ICH" : undefined} />
+                <Cover issue={r} showNumber={false} publisherMark={false} tape={followed.has(r.series_id) ? "FOLGE ICH" : undefined} />
                 {r.number === "1" && <span className="stk" style={{ alignSelf: "flex-end", marginTop: -30, marginRight: -6, transform: "rotate(6deg)", position: "relative", zIndex: 3 }}>#1</span>}
                 <span className="t">{issueTitle(r, r.series)}</span>
                 <span className="d mut" style={{ fontSize: 12 }}>{r.store_date ? shortDate(r.store_date) : ""}</span>

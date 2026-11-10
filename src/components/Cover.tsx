@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import type { Issue } from "../lib/types";
 import { useMaybeStore } from "../lib/store";
 import { eventHex } from "../lib/events";
+import { verlagOf } from "../lib/publisher";
 
 const FALLBACK = ["#c4402f", "#3a4778", "#2274b5", "#2f5fd0", "#2a2a2a", "#7a3f9a", "#b02e3a", "#2f8a4a"];
 
@@ -22,10 +23,14 @@ interface Props {
   children?: ReactNode;
   /** False where the event shows some other way, e.g. tonight's band. */
   eventMark?: boolean;
+  /** False where the publisher goes without saying, e.g. a catalog tab or one series' run. */
+  publisherMark?: boolean;
 }
 
-export function Cover({ issue, readable = true, showNumber = true, tape, big, style, className = "", children, eventMark = true }: Props) {
-  const mark = useMaybeStore()?.eventOf.get(issue.id);
+export function Cover({ issue, readable = true, showNumber = true, tape, big, style, className = "", children, eventMark = true, publisherMark = true }: Props) {
+  const store = useMaybeStore();
+  const mark = store?.eventOf.get(issue.id);
+  const verlag = publisherMark ? verlagOf(store?.data?.series.get(issue.series_id)) : "other";
   const bg: CSSProperties = {
     backgroundColor: seriesColor(issue.series_id),
     backgroundImage: issue.cover_url ? `url("${issue.cover_url}")` : undefined,
@@ -41,6 +46,7 @@ export function Cover({ issue, readable = true, showNumber = true, tape, big, st
       ) : tape === true && <span className="tape" />}
       {typeof tape === "string" && <span className="tape label">{tape}</span>}
       {showNumber && <span className="num">{issue.number}</span>}
+      {verlag !== "other" && <span className={`pub ${verlag}`} />}
       {children}
     </span>
   );

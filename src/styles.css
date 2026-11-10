@@ -7,6 +7,9 @@
   --muted: #55554f;
   --rule: #b9b8b2;
   --pink: #ff2e88;
+  /* Publisher marks only: DC blue, Marvel red. Nowhere else in the UI. */
+  --dc: #0b6fe0;
+  --marvel: #e3161f;
   --tape: rgba(236, 226, 190, 0.88);
   --copy: #c9c8c2;
   --card: #b78f5e;
@@ -69,6 +72,32 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; text-transform: uppe
 .cv.big .etape { font-size: 12px; top: -10px; padding: 2px 8px; }
 @container (max-width: 78px) { .etape .p { display: none; } .etape { font-size: 10px; padding: 0 4px; } }
 @container (max-width: 44px) { .etape { width: 70%; height: 7px; padding: 0; top: -4px; } .etape .k { display: none; } }
+/* Publisher mark: a sticker over the top right corner, DC's blue roundel or Marvel's red box.
+   Small covers keep only a dot of the colour. */
+.pub {
+  position: absolute; z-index: 3; top: -5px; right: -5px; display: flex; align-items: center; justify-content: center;
+  color: #fff; font-family: var(--display); line-height: 1; pointer-events: none; box-shadow: 0 1px 2px rgba(17, 17, 17, 0.45);
+}
+.pub.dc { width: 26px; height: 26px; border-radius: 50%; background: var(--dc); border: 1.5px solid #fff; font-size: 12px; letter-spacing: -0.02em; }
+.pub.dc::before { content: "DC"; }
+.pub.marvel { height: 15px; padding: 0 4px; background: var(--marvel); outline: 1.5px solid #fff; font-size: 11px; letter-spacing: 0.02em; }
+.pub.marvel::before { content: "MARVEL"; }
+/* A wishlist pin owns the top right corner; the mark moves to the left. */
+.cv:has(> .pinned) .pub { right: auto; left: -5px; }
+/* An event's tape runs across the top; the mark steps down below it. */
+.cv:has(> .etape) .pub { top: 14px; }
+@container (max-width: 78px) {
+  .pub { top: -4px; right: -4px; }
+  .cv:has(> .etape) .pub { top: 9px; }
+  .pub.dc { width: 17px; height: 17px; font-size: 8px; border-width: 1px; }
+  .pub.marvel { height: 11px; padding: 0 2px; font-size: 8px; outline-width: 1px; }
+}
+@container (max-width: 44px) {
+  .pub { top: -3px; right: -3px; box-shadow: none; }
+  .cv:has(> .etape) .pub { top: 5px; }
+  .pub.dc, .pub.marvel { width: 11px; height: 11px; padding: 0; font-size: 0; border: 1px solid #fff; outline: none; }
+  .pub.dc::before, .pub.marvel::before { content: none; }
+}
 .evdot { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--ink); margin-right: 6px; vertical-align: -1px; flex: none; }
 .evlink {
   border: none; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left;
@@ -95,6 +124,10 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; text-transform: uppe
 }
 .chip.on { background: var(--ink); color: var(--paper); }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+/* The publisher's colour as a dot, where its full mark would be too much (filters, evening rows). */
+.pubdot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; flex: none; box-shadow: 0 0 0 1.5px var(--paper); }
+.pubdot.dc { background: var(--dc); }
+.pubdot.marvel { background: var(--marvel); border-radius: 0; }
 .joined { display: flex; flex-wrap: wrap; }
 .joined > .chip + .chip { border-left: none; }
 .seg {
@@ -604,6 +637,15 @@ button.mrow:hover > span { text-decoration: underline; text-decoration-color: va
 .bz-bar .d { font-size: 12px; font-weight: 700; line-height: 1.2; padding-bottom: 2px; }
 .bz-axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: -6px; }
 .bz-gaxis { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 3px; margin-top: -6px; text-align: center; font-family: var(--display); font-size: 16px; }
+/* Publisher split of the twelve weeks: one bar in the publishers' colours. */
+.bz-split { display: flex; height: 22px; border: 2px solid var(--ink); background: var(--paper-hi); }
+.bz-split i { display: block; flex-basis: 0; min-width: 4px; }
+.bz-split i + i { border-left: 2px solid var(--ink); }
+.bz-split i.dc { background: var(--dc); }
+.bz-split i.marvel { background: var(--marvel); }
+.bz-split i.other { background: var(--grey); }
+.bz-splitkey { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); margin-top: -6px; }
+.bz-splitkey b { color: var(--ink); }
 .bz-kv { gap: 0 !important; border-top: 3px solid var(--ink); }
 .bz-kv .kv > span:last-child { font-weight: 700; }
 .bz-kv .kv .mut { font-weight: 400; }

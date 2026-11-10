@@ -20,7 +20,10 @@
 //
 // Between sorts, new issues are slotted in next to their series or event and
 // nothing else moves. Evenings take the list in order, as far as issues are
-// readable; unread ones roll over to the next evening.
+// readable; unread ones roll over to the next evening. An evening keeps to one
+// publisher: the first issue sets it, issues of the other publisher wait for
+// an evening of their own, unless nothing of this publisher is left to read
+// or they were moved there by hand.
 import { addDays } from "./dates";
 import type { Format } from "./types";
 
@@ -37,6 +40,8 @@ export interface PlanIssue {
   readableFrom: string | null;
   /** The event the issue belongs to and its place in it, or null. */
   event: { id: number; position: number } | null;
+  /** Its publisher; an evening keeps to one. Unset: never holds an evening to one. */
+  publisher?: string;
 }
 
 /** The reader's series ranking: series ids in order, and those read to the end in one go. */
@@ -58,8 +63,10 @@ export function readableFrom(
   format: Format | null,
   boughtOn: string | null,
   infiniteDelayDays: number,
+  webtoonDelayDays = infiniteDelayDays,
 ): string | null {
   if (format === "infinite") return storeDate ? addDays(storeDate, infiniteDelayDays) : null;
+  if (format === "webtoon") return storeDate ? addDays(storeDate, webtoonDelayDays) : null;
   if (format === "print") return boughtOn;
   return null;
 }
@@ -230,6 +237,8 @@ export function planEvenings(opts: {
   today: string;
   maxPerEvening: number;
   readToday?: number;
+  /** The publisher of what was read today, so the rest of tonight keeps to it. */
+  readTodayPublisher?: string;
 }): Evening[] {
   const { today, maxPerEvening } = opts;
   const byId = new Map(opts.issues.map((i) => [i.id, i]));
@@ -240,20 +249,31 @@ export function planEvenings(opts: {
     const capacity = Math.max(0, maxPerEvening - (d === 0 ? opts.readToday ?? 0 : 0));
     const entries: Evening["entries"] = [];
     const placed = new Set<number>();
-    const blockedSeries = new Set<number>();
-    const blockedEvents = new Set<number>();
-    for (const e of rest) {
-      if (entries.length >= capacity) break;
-      const i = byId.get(e.issueId)!;
-      const blocked = blockedSeries.has(i.seriesId) || (i.event !== null && blockedEvents.has(i.event.id));
-      if (!blocked && i.readableFrom !== null && i.readableFrom <= date) {
-        entries.push({ issueId: i.id, pinned: e.manual });
-        placed.add(i.id);
-      } else {
-        blockedSeries.add(i.seriesId);
-        if (i.event) blockedEvents.add(i.event.id);
+    let publisher = d === 0 ? opts.readTodayPublisher : undefined;
+    // First the evening's own publisher, then (if room is left) whatever else is readable.
+    for (const strict of [true, false]) {
+      const blockedSeries = new Set<number>();
+      const blockedEvents = new Set<number>();
+      for (const e of rest) {
+        if (entries.length >= capacity) break;
+        if (placed.has(e.issueId)) continue;
+        const i = byId.get(e.issueId)!;
+        const blocked = blockedSeries.has(i.seriesId) || (i.event !== null && blockedEvents.has(i.event.id));
+        const readable = !blocked && i.readableFrom !== null && i.readableFrom <= date;
+        const fits = !strict || e.manual || !i.publisher || publisher === undefined || i.publisher === publisher;
+        if (readable && fits) {
+          entries.push({ issueId: i.id, pinned: e.manual });
+          placed.add(i.id);
+          if (publisher === undefined && !e.manual && i.publisher) publisher = i.publisher;
+        } else {
+          blockedSeries.add(i.seriesId);
+          if (i.event) blockedEvents.add(i.event.id);
+        }
       }
     }
+    // Keep list order within the evening.
+    const at = new Map(rest.map((e, k) => [e.issueId, k]));
+    entries.sort((a, b) => at.get(a.issueId)! - at.get(b.issueId)!);
     rest = rest.filter((e) => !placed.has(e.issueId));
     if (entries.length || d === 0) evenings.push({ date, entries });
     if (!rest.some((e) => byId.get(e.issueId)!.readableFrom !== null)) break;

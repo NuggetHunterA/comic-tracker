@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { isSub } from "../lib/publisher";
 import { metron, supabase } from "../lib/supabase";
 import { useStore } from "../lib/store";
 import { shortDate } from "../lib/dates";
@@ -105,7 +106,7 @@ export function AllIssues({ seriesId, onSelect, sel, head, title = true }: {
   const [miss, setMiss] = useState(false);
 
   const s = data?.series.get(seriesId) ?? series ?? undefined;
-  const delay = data?.settings.infinite_delay_days ?? 30;
+  const delays = [data?.settings.infinite_delay_days ?? 30, data?.settings.webtoon_delay_days ?? 30] as const;
 
   const counts = useMemo(() => {
     const c = { alle: 0, read: 0, pile: 0, none: 0 };
@@ -205,14 +206,14 @@ export function AllIssues({ seriesId, onSelect, sel, head, title = true }: {
             {(visible) => b.list.map((i) => {
               const ui = data?.userIssues.get(i.id);
               const st = runState(ui);
-              const from = ui ? readableFrom(i.store_date, ui.format, ui.bought_on, delay) : null;
+              const from = ui ? readableFrom(i.store_date, ui.format, ui.bought_on, ...delays) : null;
               const expected = st === "pile" && !(from && from <= today);
-              const unlock = expected && ui?.format === "infinite" ? from : null;
+              const unlock = expected && isSub(ui?.format) ? from : null;
               return (
                 <button key={i.id} id={`run-${i.id}`} type="button" className={`cell ${st} ${mark === i.id ? "sel" : ""}`}
                   aria-label={`${issueTitle(i, s)}, ${st === "read" ? "gelesen" : st === "pile" ? "auf dem Stapel" : ui?.status === "wishlist" ? "auf der Wunschliste" : "fehlt"}`}
                   onClick={() => { setMark(i.id); onSelect(i.id); }}>
-                  <Cover issue={visible ? i : { ...i, cover_url: null }} readable={!expected} tape={st === "pile" && !expected} />
+                  <Cover issue={visible ? i : { ...i, cover_url: null }} readable={!expected} publisherMark={false} tape={st === "pile" && !expected} />
                   {st === "read" && <span className="stamp">GELESEN{ui?.rating ? <b>{ui.rating}</b> : null}</span>}
                   {unlock && <span className="stk date">AB {shortDate(unlock)}</span>}
                   {ui?.status === "wishlist" && <span className="wish">WUNSCH</span>}

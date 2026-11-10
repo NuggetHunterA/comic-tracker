@@ -3,6 +3,7 @@ import { moveInList, planEvenings, releaseInList, readableFrom, sortList, stalle
 import { supabase } from "./supabase";
 import { todayIso } from "./dates";
 import { eventOrder, insertAt } from "./events";
+import { verlagOf } from "./publisher";
 import type { EventIssue, EventRow, Followed, Format, Issue, Series, SeriesRank, Settings, UserIssue } from "./types";
 
 export interface Item {
@@ -72,7 +73,7 @@ interface Store {
   remember: (issues: Issue[], series: Series[]) => void;
 }
 
-const DEFAULT_SETTINGS: Settings = { infinite_delay_days: 30, max_per_evening: 3 };
+const DEFAULT_SETTINGS: Settings = { infinite_delay_days: 30, webtoon_delay_days: 30, max_per_evening: 3 };
 
 async function inChunks<T>(ids: number[], fetch: (chunk: number[]) => PromiseLike<{ data: T[] | null; error: unknown }>) {
   const out: T[] = [];
@@ -86,7 +87,8 @@ async function inChunks<T>(ids: number[], fetch: (chunk: number[]) => PromiseLik
 
 async function load(): Promise<Data> {
   const [settings, followed, wishlist, dismissed, userIssues, list, events, eventIssues, seriesOrder] = await Promise.all([
-    supabase.from("settings").select("infinite_delay_days, max_per_evening, list_rules").maybeSingle(),
+    // All columns, so the app still loads where webtoon_delay_days is not migrated yet.
+    supabase.from("settings").select("*").maybeSingle(),
     supabase.from("followed_series").select("series_id, default_format, paused, created_at"),
     supabase.from("wishlist_series").select("series_id"),
     supabase.from("dismissed_suggestions").select("series_id"),
@@ -118,7 +120,7 @@ async function load(): Promise<Data> {
 
   const s = settings.data as (Settings & { list_rules: string | null }) | null;
   return {
-    settings: s ? { infinite_delay_days: s.infinite_delay_days, max_per_evening: s.max_per_evening } : DEFAULT_SETTINGS,
+    settings: s ? { infinite_delay_days: s.infinite_delay_days, webtoon_delay_days: s.webtoon_delay_days ?? s.infinite_delay_days, max_per_evening: s.max_per_evening } : DEFAULT_SETTINGS,
     followed: (followed.data ?? []) as Followed[],
     wishlistSeries: (wishlist.data ?? []).map((w) => w.series_id),
     dismissed: (dismissed.data ?? []).map((d) => d.series_id),
@@ -207,7 +209,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     for (const ui of data.userIssues.values()) {
       const issue = data.issues.get(ui.issue_id);
       if (!issue) continue;
-      const from = readableFrom(issue.store_date, ui.format, ui.bought_on, data.settings.infinite_delay_days);
+      const from = readableFrom(issue.store_date, ui.format, ui.bought_on, data.settings.infinite_delay_days, data.settings.webtoon_delay_days);
       out.push({ issue, series: data.series.get(issue.series_id), ui, readableFrom: from, readable: !!from && from <= today });
     }
     return out;
@@ -242,6 +244,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       oldPile: i.ui.old_pile,
       readableFrom: i.readableFrom,
       event: eventOf.has(i.issue.id) ? { id: eventOf.get(i.issue.id)!.event.id, position: eventOf.get(i.issue.id)!.part } : null,
+      publisher: verlagOf(i.series),
     }));
     const order = {
       ranked: data.seriesOrder.map((r) => r.series_id),
@@ -251,13 +254,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const key = rulesKey(data.seriesOrder, events);
     // Changed rules sort the list again; otherwise new issues are only slotted in.
     const list = data.listRules === key ? syncList(data.readingList, planIssues, rules) : sortList(planIssues, rules, data.readingList);
-    const readToday = items.filter((i) => i.ui.status === "read" && i.ui.read_on === today).length;
+    const readTodayItems = items.filter((i) => i.ui.status === "read" && i.ui.read_on === today);
+    const readToday = readTodayItems.length;
+    // Tonight keeps to the publisher already read today.
+    const readTodayPublisher = readTodayItems.length ? verlagOf(readTodayItems[readTodayItems.length - 1].series) : undefined;
     return {
       key,
       rules,
       planIssues,
       list,
-      plan: planEvenings({ list, issues: planIssues, today, maxPerEvening: data.settings.max_per_evening, readToday }),
+      plan: planEvenings({ list, issues: planIssues, today, maxPerEvening: data.settings.max_per_evening, readToday, readTodayPublisher }),
       stalled: stalledSeries(planIssues).map((s) => ({ issueId: s.issue.id, behind: s.behind })),
     };
   }, [data, items, today, events, eventOf]);

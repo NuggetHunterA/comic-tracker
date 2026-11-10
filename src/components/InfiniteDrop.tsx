@@ -6,6 +6,7 @@ import { tapeOn } from "../lib/rip";
 import { Cover } from "./Cover";
 import { useConnect } from "../lib/connect";
 import { infiniteHref } from "../lib/infiniteLink";
+import { isSub, subFormatOf } from "../lib/publisher";
 
 const SEEN_KEY = "infinite-drop-seen";
 /** At most this many come out of the box; the list underneath names them all. */
@@ -28,8 +29,9 @@ const markSeen = (day: string) => {
 
 /**
  * First open of the day: a comic box lands on the plan, the lid flies off and
- * today's new issues on DC Universe Infinite (pile and wishlist, and a new
- * DC Connect) are pulled out and taped to the wall. A tap skips to the end.
+ * today's new issues in the subscriptions (DC Universe Infinite and Marvel on
+ * Webtoon; pile and wishlist, and a new DC Connect) are pulled out and taped to
+ * the wall. A tap skips to the end.
  */
 export function InfiniteDrop() {
   const { data, items, today } = useStore();
@@ -37,12 +39,12 @@ export function InfiniteDrop() {
 
   const fresh = useMemo(() => {
     if (!data) return [];
-    const delay = data.settings.infinite_delay_days;
+    const delays = { infinite: data.settings.infinite_delay_days, webtoon: data.settings.webtoon_delay_days };
     return items
       .filter((i) => {
-        if (!i.issue.store_date || addDays(i.issue.store_date, delay) !== today) return false;
-        if (i.ui.status === "pile" || i.ui.status === "expected") return i.ui.format === "infinite";
-        return i.ui.status === "wishlist" && (i.series?.publisher ?? "").toLowerCase().startsWith("dc");
+        // On the pile in a subscription, or wished for from a publisher that has one.
+        const f = i.ui.status === "pile" || i.ui.status === "expected" ? i.ui.format : i.ui.status === "wishlist" ? subFormatOf(i.series) : null;
+        return !!i.issue.store_date && isSub(f) && addDays(i.issue.store_date, delays[f]) === today;
       })
       .sort((a, b) => Number(a.ui.status === "wishlist") - Number(b.ui.status === "wishlist") || issueTitle(a.issue, a.series).localeCompare(issueTitle(b.issue, b.series)));
   }, [data, items, today]);
@@ -78,6 +80,10 @@ function Drop({ list, connect, today, onClose }: {
   const anims = useRef<Animation[]>([]);
   const shown = list.slice(0, connect ? SHOWN - 1 : SHOWN);
   const count = list.length + (connect ? 1 : 0);
+  // Named after the subscription it all came out in, "im Abo" when both have something.
+  const subs = new Set(list.map((i) => (i.ui.status === "wishlist" ? subFormatOf(i.series) : i.ui.format)));
+  if (connect) subs.add("infinite");
+  const where = subs.size > 1 ? "im Abo" : subs.has("webtoon") ? "auf Webtoon" : "auf Infinite";
 
   useLayoutEffect(() => {
     const el = root.current;
@@ -147,12 +153,12 @@ function Drop({ list, connect, today, onClose }: {
   };
 
   return (
-    <div className="drop" ref={root} role="dialog" aria-modal="true" aria-label="Neu auf Infinite" onClick={skip}>
+    <div className="drop" ref={root} role="dialog" aria-modal="true" aria-label={`Neu ${where}`} onClick={skip}>
       <div className="drop-veil" />
       <div className="drop-body">
         <div className="drop-head">
           <span className="stk">{shortDate(today)} · AB HEUTE LESBAR</span>
-          <h2>Neu auf<br />Infinite</h2>
+          <h2>Neu {where.split(" ")[0]}<br />{where.split(" ")[1]}</h2>
         </div>
         <div className="drop-row">
           {shown.map((i, k) => (
@@ -189,7 +195,7 @@ function Drop({ list, connect, today, onClose }: {
         <button type="button" className="btn hot drop-go" onClick={(e) => { e.stopPropagation(); close(); }}>Zum Plan</button>
       </div>
       <div className="drop-box" aria-hidden="true">
-        <div className="front"><span className="hole" /><span className="lbl">Neu auf Infinite<b>{count}</b></span></div>
+        <div className="front"><span className="hole" /><span className="lbl">Neu {where}<b>{count}</b></span></div>
         <div className="lid" />
       </div>
     </div>

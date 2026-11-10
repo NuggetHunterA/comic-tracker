@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { moveInList, planEvenings, releaseInList, readableFrom, sortList, stalledSeries, syncList, type Evening, type ListEntry, type ListRules, type PlanIssue } from "./plan";
+import { alignToEvenings, moveInList, planEvenings, releaseInList, readableFrom, sortList, stalledSeries, syncList, type Evening, type ListEntry, type ListRules, type PlanIssue } from "./plan";
 import { supabase } from "./supabase";
 import { todayIso } from "./dates";
 import { eventOrder, insertAt } from "./events";
@@ -253,17 +253,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const rules: ListRules = { order, startedEvents };
     const key = rulesKey(data.seriesOrder, events);
     // Changed rules sort the list again; otherwise new issues are only slotted in.
-    const list = data.listRules === key ? syncList(data.readingList, planIssues, rules) : sortList(planIssues, rules, data.readingList);
     const readTodayItems = items.filter((i) => i.ui.status === "read" && i.ui.read_on === today);
     const readToday = readTodayItems.length;
     // Tonight keeps to the publisher already read today.
     const readTodayPublisher = readTodayItems.length ? verlagOf(readTodayItems[readTodayItems.length - 1].series) : undefined;
+    const evenings = (l: ListEntry[]) =>
+      planEvenings({ list: l, issues: planIssues, today, maxPerEvening: data.settings.max_per_evening, readToday, readTodayPublisher });
+    // A full sort writes the list in the order the evenings read it, so an issue
+    // pulled forward to fill an evening stands next to that evening.
+    const sorted = (prev?: ListEntry[]) => {
+      const l = sortList(planIssues, rules, prev);
+      return alignToEvenings(l, evenings(l));
+    };
+    const list = data.listRules === key ? syncList(data.readingList, planIssues, rules) : sorted(data.readingList);
     return {
       key,
       rules,
       planIssues,
       list,
-      plan: planEvenings({ list, issues: planIssues, today, maxPerEvening: data.settings.max_per_evening, readToday, readTodayPublisher }),
+      sorted,
+      plan: evenings(list),
       stalled: stalledSeries(planIssues).map((s) => ({ issueId: s.issue.id, behind: s.behind })),
     };
   }, [data, items, today, events, eventOf]);
@@ -292,7 +301,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const resort = useCallback(async () => {
     if (!planned) return;
-    await save(sortList(planned.planIssues, planned.rules, planned.list), planned.key);
+    await save(planned.sorted(planned.list), planned.key);
   }, [planned, save]);
   const moveTo = useCallback(async (issueId: number, index: number) => {
     if (!planned) return;
@@ -301,7 +310,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const release = useCallback(async (issueId?: number) => {
     if (!planned) return;
-    const next = issueId === undefined ? sortList(planned.planIssues, planned.rules) : releaseInList(planned.list, issueId, planned.planIssues);
+    const next = issueId === undefined ? planned.sorted() : releaseInList(planned.list, issueId, planned.planIssues);
     await save(next, planned.key);
   }, [planned, save]);
 

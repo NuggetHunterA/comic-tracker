@@ -1,4 +1,6 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Flap } from "../components/Flap";
+import { loadBilanzSeen, saveBilanzSeen, type BilanzSeen } from "../lib/moments";
 import { useStore } from "../lib/store";
 import { dayLabel, monthLabel, shortDate } from "../lib/dates";
 import { issueTitle, seriesLong } from "../lib/labels";
@@ -18,6 +20,17 @@ export function Bilanz({ sel, onSelect }: { sel: StapelSel; onSelect: (s: Stapel
     () => readingStats(reads.map((i) => ({ issueId: i.issue.id, seriesId: i.issue.series_id, readOn: i.ui.read_on, rating: i.ui.rating })), today),
     [reads, today],
   );
+  // The counters turn over from what this device showed last time; unchanged ones stand still.
+  const [seen] = useState(loadBilanzSeen);
+  const shown: BilanzSeen = {
+    week: String(stats.week.count), last: String(stats.lastWeek), streak: String(stats.streak), month: String(stats.month),
+    total: String(stats.total), avg: stats.avg === null ? "" : gradeLabel(stats.avg),
+  };
+  const key = JSON.stringify(shown);
+  useEffect(() => {
+    if (stats.total > 0) saveBilanzSeen(JSON.parse(key) as BilanzSeen);
+  }, [key, stats.total]);
+  const flap = (k: string, zero = "0") => <Flap value={shown[k]} from={seen ? seen[k] ?? shown[k] : zero} delay={300} />;
   if (!data) return null;
   const byId = new Map(reads.map((i) => [i.issue.id, i]));
 
@@ -41,9 +54,9 @@ export function Bilanz({ sel, onSelect }: { sel: StapelSel; onSelect: (s: Stapel
   return (
     <div className="bilanz">
       <section aria-labelledby="bz-week">
-        <h2 id="bz-week" className="bz-head"><span className="bz-n">{week.count}</span> {week.count === 1 ? "Heft" : "Hefte"} diese Woche</h2>
+        <h2 id="bz-week" className="bz-head"><span className="bz-n">{flap("week")}</span> {week.count === 1 ? "Heft" : "Hefte"} diese Woche</h2>
         <span className="d mut bz-sub">
-          LETZTE WOCHE {stats.lastWeek}{stats.streak > 1 ? ` · ${stats.streak} ABENDE IN FOLGE` : ""}
+          LETZTE WOCHE {flap("last")}{stats.streak > 1 && <> · {flap("streak")} ABENDE IN FOLGE</>}
         </span>
         <div className="bz-days">
           {week.days.map((d, k) => {
@@ -95,9 +108,9 @@ export function Bilanz({ sel, onSelect }: { sel: StapelSel; onSelect: (s: Stapel
       <Verlage reads={reads} from={weeks[0].start} today={today} />
 
       <section aria-label="Zahlen" className="bz-kv">
-        <div className="kv"><span>{monthLabel(today)}</span><span>{hefte(stats.month)}</span></div>
-        <div className="kv"><span>GESAMT</span><span>{hefte(stats.total)} gelesen</span></div>
-        <div className="kv"><span>Ø NOTE</span><span>{stats.avg === null ? "noch keine Noten" : <>{gradeLabel(stats.avg)} <span className="mut">aus {stats.rated} {stats.rated === 1 ? "Note" : "Noten"}</span></>}</span></div>
+        <div className="kv"><span>{monthLabel(today)}</span><span>{flap("month")} {stats.month === 1 ? "Heft" : "Hefte"}</span></div>
+        <div className="kv"><span>GESAMT</span><span>{flap("total")} {stats.total === 1 ? "Heft" : "Hefte"} gelesen</span></div>
+        <div className="kv"><span>Ø NOTE</span><span>{stats.avg === null ? "noch keine Noten" : <>{flap("avg", "0,0")} <span className="mut">aus {stats.rated} {stats.rated === 1 ? "Note" : "Noten"}</span></>}</span></div>
       </section>
 
       <section aria-labelledby="bz-issues">

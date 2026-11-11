@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 import { slideTab } from "../lib/motion";
+import { Flap } from "./Flap";
 
 import type { Tab } from "../lib/route";
 
@@ -34,7 +35,7 @@ export function Nav({ tab, counters }: { tab: Tab; counters: Record<Tab, string>
             <span className="pb" aria-hidden="true" />
             {t.label}
           </span>
-          <span className="c">{counters[t.id]}</span>
+          <span className="c"><Flap value={counters[t.id]} /></span>
         </a>
       ))}
     </nav>

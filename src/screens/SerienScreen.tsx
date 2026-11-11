@@ -13,6 +13,8 @@ import { ErrorNote } from "../components/ErrorNote";
 import { AllIssues, useSeriesRange } from "../components/AllIssues";
 import { isFresh, markFresh } from "../lib/motion";
 import { NewEvent, Ticks } from "../components/EventDetail";
+import { Seal, doneOn } from "../components/EventFinale";
+import { loadSeals } from "../lib/moments";
 import { defaultFormatOf, isSub, subFormatOf, verlagOf, type Verlag } from "../lib/publisher";
 
 type VerlagFilter = "alle" | Exclude<Verlag, "other">;
@@ -93,8 +95,13 @@ export function SerienList({ tab, setTab, sel, onSelect }: {
   const openCount = (sid: number) => items.filter((i) => i.issue.series_id === sid && i.ui.status === "pile").length;
 
   const shownEvents = events.filter(showsEvent);
-  const done = shownEvents.filter(eventDone);
+  const readOn = (id: number) => data.userIssues.get(id)?.read_on;
+  // Read to the end: newest seal first.
+  const done = shownEvents.filter(eventDone).map((v) => ({ v, on: doneOn(v, readOn) }))
+    .sort((a, b) => (b.on ?? "").localeCompare(a.on ?? ""));
   const open = shownEvents.filter((v) => !eventDone(v));
+  // An event sealed on this device that got new issues comes back with "+N" on its seal.
+  const seals = loadSeals();
   const eventRow = (v: EventView) => {
     const on = sel?.kind === "event" && sel.id === v.event.id;
     const next = v.order.find((i) => data.userIssues.get(i.id)?.status !== "read");
@@ -104,7 +111,10 @@ export function SerienList({ tab, setTab, sel, onSelect }: {
     return (
       <button key={v.event.id} type="button" className={`evrow ${on ? "on" : ""}`} aria-current={on ? "true" : undefined} onClick={() => onSelect({ kind: "event", id: v.event.id })}>
         <span style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-          <h3 style={{ fontSize: 24 }}>{v.event.name}</h3>
+          {seals[v.event.id] !== undefined && v.order.length > seals[v.event.id] && (
+            <Seal event={v.event} total={seals[v.event.id]} size="sm" plus={v.order.length - seals[v.event.id]} />
+          )}
+          <h3 style={{ fontSize: 24, flex: 1 }}>{v.event.name}</h3>
           <Ticks view={v} small />
         </span>
         <span className="d mut" style={{ fontSize: 12 }}>{info}{next && v.read > 0 ? ` · WEITER MIT ${issueTitle(next, data.series.get(next.series_id)).toUpperCase()}` : ""}</span>
@@ -147,12 +157,22 @@ export function SerienList({ tab, setTab, sel, onSelect }: {
             {open.map(eventRow)}
           </div>
           {done.length > 0 && (
-            <details open={done.some((v) => sel?.kind === "event" && sel.id === v.event.id)}>
-              <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 15, minHeight: 40, display: "flex", alignItems: "center" }}>Durchgelesen · {done.length}</summary>
-              <div className="evdone" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                {done.map(eventRow)}
+            <section aria-labelledby="ev-done">
+              <h2 id="ev-done" className="ev-h">Abgeschlossen</h2>
+              <div className="shelf">
+                {done.map(({ v, on }) => {
+                  const here = sel?.kind === "event" && sel.id === v.event.id;
+                  return (
+                    <button key={v.event.id} type="button" className={here ? "on" : ""} aria-current={here ? "true" : undefined}
+                      onClick={() => onSelect({ kind: "event", id: v.event.id })}>
+                      <Seal event={v.event} total={v.order.length} size="md" />
+                      <span className="n">{v.event.name}</span>
+                      {on && <span className="d mut">{shortDate(on)}</span>}
+                    </button>
+                  );
+                })}
               </div>
-            </details>
+            </section>
           )}
         </section>
       ) : tab === "serien" ? (

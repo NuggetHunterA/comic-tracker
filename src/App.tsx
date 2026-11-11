@@ -22,6 +22,7 @@ import { UndoProvider } from "./lib/undo";
 import { UndoStrip } from "./components/UndoStrip";
 import { backTo, navigate, onRouteChange, replaceRoute, parseRoute, type Route, type SerienSel, type SerienTab, type StapelSel } from "./lib/route";
 import { OfflineStrip } from "./components/OfflineStrip";
+import { EventFinale } from "./components/EventFinale";
 
 // Two panes only when there is room for both: wide screens, or a Fold opened in landscape.
 // Held upright (3:4) the inner screen is too narrow for a second pane and gets the one-column layout.
@@ -189,6 +190,7 @@ function Shell() {
         {data && detail}
       </div>
       {data && <UndoStrip />}
+      {data && <EventFinale />}
       {data && <InfiniteDrop />}
     </div>
   );

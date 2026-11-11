@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { readableFrom, type Evening, type ListEntry } from "./plan";
 import { todayIso } from "./dates";
+import { noteRead } from "./moments";
 import { eventOrder, type EventMark, type EventView } from "./events";
 import { load, type Data } from "./load";
 import { useListSync } from "./listSync";
@@ -190,7 +191,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setData((d) => (d ? withOps(d, [op]) : d));
     goOffline({ at: loadedAt.current });
   }, []);
-  const markRead = useCallback((issueId: number) => later({ kind: "read", issueId, day: todayIso() }), [later]);
+  const markRead = useCallback((issueId: number) => {
+    noteRead();
+    return later({ kind: "read", issueId, day: todayIso() });
+  }, [later]);
   const rate = useCallback((issueId: number, rating: number | null) => later({ kind: "rate", issueId, rating }), [later]);
   const takeBack = useCallback(async (issueId: number, before: Partial<UserIssue>) => {
     const q = await getQueue();

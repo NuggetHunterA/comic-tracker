@@ -4,7 +4,7 @@ import type { Page, Route } from "@playwright/test";
 // Writes are accepted and forgotten. The app has no sign-in.
 
 const PROJECT = "towpmroicvnsbobktsfz";
-const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+export const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
 
 export const SERIES = [
   { id: 1, name: "Absolute Batman", year_began: 2024, publisher: "DC Comics", volume: 1, status: "Ongoing" },
@@ -38,7 +38,7 @@ export const ARCHIVE = [
   envelope(3, "classic", [1608, 1609, 1610, 1611, 1612, 1613], { series_id: 3, title: "Hush", label_year: 2002, label_writer: "Jeph Loeb", reason: "Aus der Klassiker-Liste", verified: true }),
 ];
 
-const pile = (issue_id: number) => ({ issue_id, status: "pile", format: "print", old_pile: false, bought_on: null, read_on: null, rating: null, skip_plan: false });
+export const pile = (issue_id: number) => ({ issue_id, status: "pile", format: "print", old_pile: false, bought_on: null, read_on: null, rating: null, skip_plan: false });
 
 const TABLES: Record<string, unknown[]> = {
   settings: [{ infinite_delay_days: 30, webtoon_delay_days: 30, max_per_evening: 3, list_rules: null }],
@@ -58,7 +58,9 @@ const TABLES: Record<string, unknown[]> = {
   issues: [...ISSUES, ...ARCHIVE_ISSUES],
 };
 
-export async function fakeSupabase(page: Page) {
+/** `tables` replaces the canned rows of single tables for one test. */
+export async function fakeSupabase(page: Page, tables: Record<string, unknown[]> = {}) {
+  const live: Record<string, unknown[]> = { ...TABLES, ...tables };
   const json = (route: Route, body: unknown, status = 200) =>
     route.fulfill({ status, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify(body) });
 
@@ -72,8 +74,14 @@ export async function fakeSupabase(page: Page) {
     if (url.pathname.startsWith("/functions/v1/")) return json(route, {});
     const table = url.pathname.match(/^\/rest\/v1\/(?:rpc\/)?([^/?]+)/)?.[1];
     if (!table) return json(route, {}, 404);
+    // An update by issue_id sticks for the rest of the test, so a reload shows it.
+    const eqId = url.searchParams.get("issue_id")?.match(/^eq\.(\d+)$/)?.[1];
+    if (req.method() === "PATCH" && table === "user_issues" && eqId) {
+      const body = req.postDataJSON() as Record<string, unknown>;
+      live.user_issues = live.user_issues.map((r) => ((r as { issue_id: number }).issue_id === Number(eqId) ? { ...(r as object), ...body } : r));
+    }
     if (req.method() !== "GET") return json(route, req.headers()["accept"]?.includes("pgrst.object") ? {} : [], 201);
-    let rows = TABLES[table] ?? [];
+    let rows = live[table] ?? [];
     // The app asks for issues and series by id: ?id=in.(1,2)
     const ids = url.searchParams.get("id")?.match(/^in\.\((.*)\)$/)?.[1];
     if (ids !== undefined) {

@@ -18,6 +18,7 @@ declare t text;
 begin
   foreach t in array array['settings','followed_series','wishlist_series','user_issues','plan_entries',
     'dismissed_suggestions','connect_reads','events','event_issues','series_order','reading_list'] loop
+    continue when to_regclass('comics.' || t) is null; -- plan_entries may already be gone
     execute format('alter table comics.%I alter column user_id set default comics.owner_id()', t);
     execute format('drop policy if exists "own rows" on comics.%I', t);
     execute format('create policy "owner rows" on comics.%I for all to anon, authenticated

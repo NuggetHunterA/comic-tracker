@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { StoreProvider, useStore } from "./lib/store";
 import { monthLabel, monthStart } from "./lib/dates";
-import { Nav, TABS, type Tab } from "./components/Nav";
+import { Nav, type Tab } from "./components/Nav";
 import { BackButton, Detail, EmptyDetail } from "./components/Detail";
 import { AllIssues } from "./components/AllIssues";
 import { seriesLong } from "./lib/labels";
@@ -9,13 +9,13 @@ import { IssueDetail } from "./components/IssueDetail";
 import { InfiniteDrop } from "./components/InfiniteDrop";
 import { ImportForm } from "./components/ImportForm";
 import { PlanScreen } from "./screens/PlanScreen";
-import { StapelList, StapelSeries, type StapelSel } from "./screens/StapelScreen";
+import { StapelList, StapelSeries } from "./screens/StapelScreen";
 import { KatalogList } from "./screens/KatalogScreen";
-import { SerienList, SeriesDetail, type SerienSel, type SerienTab } from "./screens/SerienScreen";
+import { SerienList, SeriesDetail } from "./screens/SerienScreen";
 import { EventDetail } from "./components/EventDetail";
 import { SeriesOrder } from "./components/SeriesOrder";
 import { IssueOrder } from "./components/IssueOrder";
-import { onOpenEvent, onOpenRun } from "./lib/nav";
+import { backTo, navigate, onRouteChange, parseRoute, type Route, type SerienSel, type SerienTab, type StapelSel } from "./lib/route";
 import { OfflineStrip } from "./components/OfflineStrip";
 
 // Two panes only when there is room for both: wide screens, or a Fold opened in landscape.
@@ -33,18 +33,11 @@ function useWide() {
   return wide;
 }
 
-function useTab(): Tab {
-  const read = () => {
-    const h = window.location.hash.slice(1);
-    return (TABS.find((t) => t.id === h)?.id ?? "plan") as Tab;
-  };
-  const [tab, setTab] = useState<Tab>(read);
-  useEffect(() => {
-    const on = () => setTab(read());
-    window.addEventListener("hashchange", on);
-    return () => window.removeEventListener("hashchange", on);
-  }, []);
-  return tab;
+/** The route in the URL hash, kept in step with links, the app and the back button. */
+function useRoute(): Route {
+  const [hash, setHash] = useState(() => window.location.hash);
+  useEffect(() => onRouteChange(() => setHash(window.location.hash)), []);
+  return useMemo(() => parseRoute(hash), [hash]);
 }
 
 // Single-user app without sign-in: the database serves the owner's rows to the publishable key.
@@ -58,15 +51,30 @@ export function App() {
 
 function Shell() {
   const wide = useWide();
-  const tab = useTab();
+  const route = useRoute();
+  const { tab } = route;
   const { data, error, plan, today, items } = useStore();
 
-  const [planSel, setPlanSel] = useState<number | null>(null);
-  const [stapelSel, setStapelSel] = useState<StapelSel>(null);
+  // What is open on each tab lives in the URL, so the back button closes it and a link opens it.
+  const planSel = route.tab === "plan" ? route.sel : null;
+  const stapelSel: StapelSel = route.tab === "stapel" ? route.sel : null;
+  const katalogSel = route.tab === "katalog" ? route.sel : null;
+  const serienTab: SerienTab = route.tab === "serien" ? route.sub : "serien";
+  const serienSel: SerienSel = route.tab === "serien" ? route.sel : null;
   const [month, setMonth] = useState(() => monthStart(today));
-  const [katalogSel, setKatalogSel] = useState<number | null>(null);
-  const [serienTab, setSerienTab] = useState<SerienTab>("serien");
-  const [serienSel, setSerienSel] = useState<SerienSel>(null);
+
+  const setPlanSel = useCallback((sel: number) => navigate({ tab: "plan", sel }), []);
+  const setStapelSel = useCallback((sel: StapelSel) => navigate({ tab: "stapel", sel }), []);
+  const setKatalogSel = useCallback((sel: number) => navigate({ tab: "katalog", sel }), []);
+  const setSerienSel = useCallback((sel: SerienSel) => navigate({ tab: "serien", sub: serienTab, sel }), [serienTab]);
+  // Switching the list keeps the detail open, except an event, which belongs to the events list.
+  const setSerienTab = useCallback(
+    (sub: SerienTab) => navigate({ tab: "serien", sub, sel: serienSel?.kind === "event" && sub !== "events" ? null : serienSel }),
+    [serienSel],
+  );
+  // Back links inside a detail step back when that is where the user came from.
+  const backStapel = (sel: StapelSel) => backTo({ tab: "stapel", sel });
+  const backSerien = (sel: SerienSel) => backTo({ tab: "serien", sub: serienTab, sel });
 
   const tonight = plan.find((e) => e.date === today)?.entries ?? [];
   const pile = items.filter((i) => i.ui.status === "pile" && i.readable).length;
@@ -79,22 +87,10 @@ function Shell() {
 
   // Unfolded, the detail pane shows something useful right away.
   const planShown = planSel ?? (wide ? tonight[0]?.issueId ?? null : null);
-  const closePlan = useCallback(() => setPlanSel(null), []);
-  const closeStapel = useCallback(() => setStapelSel(null), []);
-  const closeKatalog = useCallback(() => setKatalogSel(null), []);
-  const closeSerien = useCallback(() => setSerienSel(null), []);
-  // The detail's event line jumps here from any tab.
-  useEffect(() => onOpenEvent((id) => {
-    setSerienTab("events");
-    setSerienSel({ kind: "event", id });
-    window.location.hash = "serien";
-  }), []);
-  // So does the detail's series line, to the whole run of the series.
-  useEffect(() => onOpenRun((id, sel) => {
-    setSerienTab("serien");
-    setSerienSel({ kind: "all", id, sel });
-    window.location.hash = "serien";
-  }), []);
+  const closePlan = useCallback(() => backTo({ tab: "plan", sel: null }), []);
+  const closeStapel = useCallback(() => backTo({ tab: "stapel", sel: null }), []);
+  const closeKatalog = useCallback(() => backTo({ tab: "katalog", sel: null }), []);
+  const closeSerien = useCallback(() => backTo({ tab: "serien", sub: serienTab, sel: null }), [serienTab]);
 
   let list: React.ReactNode = null;
   let detail: React.ReactNode = null;
@@ -115,15 +111,15 @@ function Shell() {
       s?.kind === "series" ? <StapelSeries seriesId={s.id} onSelect={setStapelSel} /> :
       s?.kind === "all" ? (
         <AllIssues key={s.id} seriesId={s.id} sel={s.sel}
-          head={wide ? <BackButton onClick={() => setStapelSel({ kind: "series", id: s.id })}>{seriesLong(data?.series.get(s.id))}</BackButton> : undefined}
+          head={wide ? <BackButton onClick={() => backStapel({ kind: "series", id: s.id })}>{seriesLong(data?.series.get(s.id))}</BackButton> : undefined}
           onSelect={(id) => setStapelSel({ kind: "issue", id, series: s.id, fromAll: true })} />
       ) :
       s?.kind === "issue" ? (
         <>
           {s.fromAll && s.series ? (
-            <BackButton onClick={() => setStapelSel({ kind: "all", id: s.series!, sel: s.id })}>Alle Hefte</BackButton>
+            <BackButton onClick={() => backStapel({ kind: "all", id: s.series!, sel: s.id })}>Alle Hefte</BackButton>
           ) : wide && s.series ? (
-            <BackButton onClick={() => setStapelSel({ kind: "series", id: s.series! })}>Zur Serie</BackButton>
+            <BackButton onClick={() => backStapel({ kind: "series", id: s.series! })}>Zur Serie</BackButton>
           ) : null}
           <IssueDetail issueId={s.id} onClose={closeStapel} />
         </>
@@ -143,12 +139,12 @@ function Shell() {
       s?.kind === "series" ? <SeriesDetail key={s.id} seriesId={s.id} found={s.found} onSelect={setSerienSel} onGone={closeSerien} /> :
       s?.kind === "all" ? (
         <AllIssues key={s.id} seriesId={s.id} sel={s.sel}
-          head={<BackButton onClick={() => setSerienSel({ kind: "series", id: s.id })}>{seriesLong(data?.series.get(s.id))}</BackButton>}
+          head={<BackButton onClick={() => backSerien({ kind: "series", id: s.id })}>{seriesLong(data?.series.get(s.id))}</BackButton>}
           onSelect={(id) => setSerienSel({ kind: "issue", id, back: { kind: "all", id: s.id, sel: id } })} />
       ) :
       s?.kind === "issue" ? (
         <>
-          {s.back && <BackButton onClick={() => setSerienSel(s.back!)}>{s.back.kind === "all" ? "Alle Hefte" : seriesLong(data?.series.get(s.back.id))}</BackButton>}
+          {s.back && <BackButton onClick={() => backSerien(s.back!)}>{s.back.kind === "all" ? "Alle Hefte" : seriesLong(data?.series.get(s.back.id))}</BackButton>}
           <IssueDetail issueId={s.id} onClose={closeSerien} />
         </>
       ) :

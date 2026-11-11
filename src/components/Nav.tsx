@@ -1,7 +1,9 @@
 import { useLayoutEffect, useRef } from "react";
 import { slideTab } from "../lib/motion";
 
-export type Tab = "plan" | "stapel" | "katalog" | "serien";
+import type { Tab } from "../lib/route";
+
+export type { Tab };
 
 export const TABS: { id: Tab; label: string }[] = [
   { id: "plan", label: "Plan" },

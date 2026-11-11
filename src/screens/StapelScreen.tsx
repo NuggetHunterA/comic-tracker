@@ -10,14 +10,8 @@ import { EventTags } from "./PlanScreen";
 import { Bilanz } from "./Bilanz";
 import { HandIcon } from "../components/HandIcon";
 
-export type StapelSel =
-  | { kind: "series"; id: number }
-  | { kind: "all"; id: number; sel?: number }
-  | { kind: "issue"; id: number; series?: number; fromAll?: boolean }
-  | { kind: "import" }
-  | { kind: "order" }
-  | { kind: "list" }
-  | null;
+export type { StapelSel } from "../lib/route";
+import type { StapelSel } from "../lib/route";
 type Filter = "alle" | "print" | "infinite" | "webtoon" | "gelesen";
 
 const isOpen = (i: Item) => i.ui.status === "pile";

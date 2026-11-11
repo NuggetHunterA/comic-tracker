@@ -16,6 +16,7 @@ import { EventDetail } from "./components/EventDetail";
 import { SeriesOrder } from "./components/SeriesOrder";
 import { IssueOrder } from "./components/IssueOrder";
 import { backTo, navigate, onRouteChange, parseRoute, type Route, type SerienSel, type SerienTab, type StapelSel } from "./lib/route";
+import { OfflineStrip } from "./components/OfflineStrip";
 
 // Two panes only when there is room for both: wide screens, or a Fold opened in landscape.
 // Held upright (3:4) the inner screen is too narrow for a second pane and gets the one-column layout.
@@ -155,6 +156,7 @@ function Shell() {
     <div className="app">
       <Nav tab={tab} counters={counters} />
       <div className="panes">
+        <OfflineStrip />
         <main className={`pane list ${wideList ? "wide" : ""}`}>
           {error && <p role="alert" className="stk" style={{ whiteSpace: "normal" }}>Fehler beim Laden: {error}</p>}
           {!data && !error ? <p className="d mut">LÄDT …</p> : list}

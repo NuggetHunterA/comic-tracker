@@ -55,6 +55,8 @@ export function useListSync(
   today: string,
   events: EventView[],
   eventOf: Map<number, EventMark>,
+  /** Without network the list is only kept on screen; it is saved once the network is back. */
+  offline = false,
 ): ListSync {
   const planned = useMemo(() => {
     if (!data) return null;
@@ -123,10 +125,10 @@ export function useListSync(
     }
   }, [data, setData, setError]);
   useEffect(() => {
-    if (!data || !planned || saving.current) return;
+    if (!data || !planned || saving.current || offline) return;
     if (data.listRules === planned.key && sameList(data.readingList, planned.list)) return;
     void save(planned.list, planned.key);
-  }, [data, planned, save]);
+  }, [data, planned, save, offline]);
 
   const resort = useCallback(async () => {
     if (!planned) return;

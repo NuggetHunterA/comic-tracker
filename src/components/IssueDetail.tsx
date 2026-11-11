@@ -56,7 +56,7 @@ function useDesk() {
 }
 
 function IssueDetailBody({ issueId, onClose }: Props) {
-  const { data, today, plan, list, moveTo, release } = useStore();
+  const { data, today, plan, list, moveTo, release, markRead: read, rate } = useStore();
   const { run, busy, error } = useRun();
   const [picked, setPickFormat] = useState<Format | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -96,7 +96,7 @@ function IssueDetailBody({ issueId, onClose }: Props) {
     // Tear the cover off, then tape it back on marked as read.
     const cv = cover();
     const rip = cv ? ripCover(cv) : null;
-    await run(() => Promise.all([actions.markRead(issueId, today), new Promise((done) => window.setTimeout(done, RIP_MS))]));
+    await run(() => Promise.all([read(issueId), new Promise((done) => window.setTimeout(done, RIP_MS))]));
     rip?.restore();
   };
   const readEarlier = () => run(() => actions.markReadEarlier(issueId));
@@ -224,7 +224,7 @@ function IssueDetailBody({ issueId, onClose }: Props) {
                   setStamped(n);
                   thud(cover(), 230);
                 }
-                run(() => actions.rate(issueId, ui.rating === n ? null : n));
+                run(() => rate(issueId, ui.rating === n ? null : n));
               }}>{n}</button>
           ))}
         </div>

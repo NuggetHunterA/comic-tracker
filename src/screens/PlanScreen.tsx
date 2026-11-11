@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
-import { actions, useStore } from "../lib/store";
+import { useStore } from "../lib/store";
 import { dayLabel, shortDate } from "../lib/dates";
 import { issueTitle, runsLabel } from "../lib/labels";
 import { Cover } from "../components/Cover";
@@ -14,7 +14,7 @@ import { isSub, verlagOf } from "../lib/publisher";
 const wait = (ms: number) => new Promise((done) => window.setTimeout(done, ms));
 
 export function PlanScreen({ selected, onSelect }: { selected: number | null; onSelect: (id: number) => void }) {
-  const { data, plan, stalled, today, items, events, eventOf } = useStore();
+  const { data, plan, stalled, today, items, events, eventOf, markRead: read } = useStore();
   const { run, busy, error } = useRun();
 
   const view = useMemo(() => {
@@ -53,7 +53,7 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
   const markRead = async (issueId: number, card: HTMLElement | null) => {
     const cv = card?.querySelector<HTMLElement>(".cv");
     const rip = cv ? ripCover(cv) : null;
-    const ok = await run(() => Promise.all([actions.markRead(issueId, today), wait(RIP_RELEASE_MS)]));
+    const ok = await run(() => Promise.all([read(issueId), wait(RIP_RELEASE_MS)]));
     if (!ok) rip?.restore();
   };
 

@@ -26,7 +26,7 @@ function sameList(a: ListEntry[], b: ListEntry[]): boolean {
 }
 
 /** Saves the list: rows that left are deleted, the rest get their place. */
-async function writeList(prev: ListEntry[], next: ListEntry[]) {
+export async function writeList(prev: ListEntry[], next: ListEntry[]) {
   const keep = new Set(next.map((e) => e.issueId));
   const gone = prev.filter((e) => !keep.has(e.issueId)).map((e) => e.issueId);
   for (let i = 0; i < gone.length; i += 150) {
@@ -76,6 +76,7 @@ export function useListSync(
       readableFrom: i.readableFrom,
       event: eventOf.has(i.issue.id) ? { id: eventOf.get(i.issue.id)!.event.id, position: eventOf.get(i.issue.id)!.part } : null,
       publisher: verlagOf(i.series),
+      archive: !!i.ui.archive,
     }));
     const order = {
       ranked: data.seriesOrder.map((r) => r.series_id),

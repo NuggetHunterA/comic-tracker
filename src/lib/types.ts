@@ -29,6 +29,8 @@ export interface UserIssue {
   read_on: string | null;
   rating: number | null;
   skip_plan: boolean;
+  /** Taken from the Archivkiste: only fills evenings the plan leaves empty. */
+  archive?: boolean;
 }
 
 export interface Followed {
@@ -81,4 +83,24 @@ export interface Connect {
   cover_url: string | null;
   store_date: string | null;
   read_on: string | null;
+}
+
+/**
+ * One envelope in the Archivkiste: a run of older issues (first issue first)
+ * the Metron sync found, with the hint printed on its label.
+ */
+export interface ArchiveSuggestion {
+  id: number;
+  kind: "writer" | "classic" | "anniversary" | "season";
+  season: "hw" | "xm" | null;
+  series_id: number;
+  issue_ids: number[];
+  title: string | null;
+  label_year: number | null;
+  label_writer: string | null;
+  reason: string | null;
+  verified: boolean;
+  status: "open" | "taken" | "back" | "never" | "unavailable";
+  taken_count: number;
+  valid_from: string | null;
 }

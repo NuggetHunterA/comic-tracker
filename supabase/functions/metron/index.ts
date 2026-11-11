@@ -1,7 +1,9 @@
 // Metron sync for the comic tracker.
 // POST {action: "cron"} with x-cron-secret: scheduled sync of followed series and the catalog.
+// The cron run also keeps the Archivkiste filled (fillArchive).
 // POST {action: "search-series", q}, {action: "sync-series", series_id} or {action: "issue-writer", issue_id} with a user JWT.
 import { createClient } from "npm:@supabase/supabase-js@2.58.0";
+import { CLASSICS, SEASONS, SEASON_TERMS, type Classic } from "../_shared/classics.ts";
 
 const METRON = "https://metron.cloud/api";
 const MIN_GAP_MS = 3200; // Metron allows 20 requests per minute.
@@ -209,6 +211,7 @@ async function cron(): Promise<string> {
     await syncCatalog(log);
     await db.rpc("materialize_followed");
     await syncPileWriters(log);
+    await fillArchive(log);
   } catch (e) {
     if (e instanceof OutOfTime) log.push("budget used, continuing next run");
     else if (e instanceof RateLimited) log.push(`rate limited (retry-after ${e.message})`);
@@ -220,6 +223,328 @@ async function cron(): Promise<string> {
   const message = log.join("; ");
   if (run) await db.from("sync_runs").update({ finished_at: new Date().toISOString(), ok, message }).eq("id", run.id);
   return message;
+}
+
+// ---------- Archivkiste ----------
+// Keeps a few envelopes ready: runs from writers the reader rated 9 or 10
+// twice, runs from the built-in list, an issue out this week 10, 20 or 30
+// years ago, and in October and December a holiday special. DC runs are
+// only kept when DC Universe Infinite has their first issue.
+
+const ARCHIVE_OPEN = 6;
+const WRITER_REST_D = 30;
+const BACK_REST_D = 90;
+const MAX_RUN = 8;
+const RUN_START = 6;
+const WRITER_PAGES = 3;
+
+type ArchiveKind = "writer" | "classic" | "anniversary" | "season";
+interface Draft {
+  kind: ArchiveKind;
+  season?: "hw" | "xm";
+  items: any[];
+  publisher: string;
+  title: string | null;
+  year: number | null;
+  writer: string | null;
+  reason: string;
+  validFrom?: string | null;
+}
+interface ArchiveCtx {
+  suggestions: any[];
+  ownedIssues: Set<number>;
+  ownedSeries: Set<number>;
+  suggestedSeries: Set<number>;
+}
+
+const berlinDay = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" }).format(new Date());
+const shiftDays = (iso: string, days: number) => {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+const mondayOf = (iso: string) => shiftDays(iso, -((new Date(`${iso}T12:00:00Z`).getUTCDay() + 6) % 7));
+const shuffle = <T>(list: T[]): T[] => {
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
+const byIssueNumber = (a: any, b: any) =>
+  (sortNumber(a.number) ?? 1e9) - (sortNumber(b.number) ?? 1e9) || String(a.cover_date ?? "").localeCompare(String(b.cover_date ?? ""));
+const coverYear = (it: any): number | null => {
+  const d = it.cover_date ?? it.store_date;
+  return d ? Number(String(d).slice(0, 4)) : null;
+};
+const sameName = (a: string | undefined, b: string) => (a ?? "").trim().toLowerCase() === b.trim().toLowerCase();
+
+async function metronPages(path: string, params: Record<string, string | number>, max: number): Promise<any[]> {
+  const out: any[] = [];
+  let page = await metron(path, params);
+  out.push(...page.results);
+  for (let n = 1; page.next && n < max; n++) {
+    page = await metron(page.next);
+    out.push(...page.results);
+  }
+  return out;
+}
+
+async function archiveContext(): Promise<ArchiveCtx> {
+  const [sugg, uis, fol] = await Promise.all([
+    db.from("archive_suggestions").select("id, kind, season, series_id, issue_ids, status, valid_from"),
+    db.from("user_issues").select("issue_id"),
+    db.from("followed_series").select("series_id"),
+  ]);
+  for (const r of [sugg, uis, fol]) if (r.error) throw r.error;
+  const ownedIssues = new Set<number>((uis.data ?? []).map((u) => u.issue_id));
+  const ownedSeries = new Set<number>((fol.data ?? []).map((f) => f.series_id));
+  const ids = [...ownedIssues];
+  for (let i = 0; i < ids.length; i += 150) {
+    const { data, error } = await db.from("issues").select("series_id").in("id", ids.slice(i, i + 150));
+    if (error) throw error;
+    for (const r of data ?? []) ownedSeries.add(r.series_id);
+  }
+  const suggestions = sugg.data ?? [];
+  return { suggestions, ownedIssues, ownedSeries, suggestedSeries: new Set(suggestions.map((s) => s.series_id)) };
+}
+
+/** First issue's page on DC Universe Infinite, via the infinite function; undefined when the lookup failed. */
+async function onInfinite(issueId: number): Promise<string | null | undefined> {
+  if (Date.now() + 50_000 > deadline) throw new OutOfTime();
+  try {
+    const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/infinite`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "issue", issue_id: issueId }),
+      signal: AbortSignal.timeout(45_000),
+    });
+    if (!res.ok) return undefined;
+    return ((await res.json()) as { url: string | null }).url;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Puts an envelope in the box. False when it could not be checked (tried again next run). */
+async function keep(ctx: ArchiveCtx, d: Draft): Promise<boolean> {
+  const items = [...d.items].sort(byIssueNumber);
+  await upsertListIssues(items, d.publisher);
+  let status = "open";
+  let verified = false;
+  if (d.publisher === PUBLISHERS.DC) {
+    const url = await onInfinite(items[0].id);
+    if (url === undefined) return false;
+    verified = !!url;
+    if (!url) status = "unavailable";
+  }
+  const { error } = await db.from("archive_suggestions").upsert({
+    kind: d.kind,
+    season: d.season ?? null,
+    series_id: items[0].series.id,
+    issue_ids: items.map((i) => i.id),
+    title: d.title,
+    label_year: d.year,
+    label_writer: d.writer,
+    reason: d.reason,
+    verified,
+    status,
+    valid_from: d.validFrom ?? null,
+  }, { onConflict: "user_id,kind,issue_ids", ignoreDuplicates: true });
+  if (error) throw error;
+  ctx.suggestedSeries.add(items[0].series.id);
+  return status === "open";
+}
+
+const trimRun = (items: any[]) => {
+  const run = [...items].sort(byIssueNumber);
+  return run.length > MAX_RUN ? run.slice(0, RUN_START) : run;
+};
+const timesLabel = (n: number) => (n === 2 ? "zweimal" : n === 3 ? "dreimal" : `${n}-mal`);
+
+/** Writers with two or more issues rated 9 or 10, and those issues. */
+async function ratedWriters(): Promise<Map<string, number[]>> {
+  const { data: rated, error } = await db.from("user_issues").select("issue_id").gte("rating", 9);
+  if (error) throw error;
+  const ids = (rated ?? []).map((r) => r.issue_id);
+  const out = new Map<string, number[]>();
+  for (let i = 0; i < ids.length; i += 150) {
+    const { data, error: e } = await db.from("issues").select("id, writer").in("id", ids.slice(i, i + 150)).not("writer", "is", null);
+    if (e) throw e;
+    for (const r of data ?? []) out.set(r.writer, [...(out.get(r.writer) ?? []), r.id]);
+  }
+  for (const [w, list] of out) if (list.length < 2) out.delete(w);
+  return out;
+}
+
+/** Older runs by a writer the reader likes: series where the writer wrote, not read or followed yet. */
+async function writerDrafts(ctx: ArchiveCtx, writers: Map<string, number[]>, log: string[]): Promise<Draft[]> {
+  const out: Draft[] = [];
+  for (const [name, issueIds] of shuffle([...writers])) {
+    const key = `archive:writer:${name}`;
+    const last = await getState(key);
+    if (last && Date.parse(last) > Date.now() - WRITER_REST_D * 86400_000) continue;
+    const it = await metron(`issue/${issueIds[0]}/`);
+    const credit = (it.credits ?? []).find((c: any) => c.creator === name);
+    const role = credit?.role?.find((r: any) => r.name === "Writer");
+    const publisher = it.publisher?.name ?? null;
+    await setState(key, new Date().toISOString());
+    if (!credit?.id || !role?.id || !publisher) continue;
+    const items = await metronPages("issue/", { creator_id: credit.id, role_id: role.id, publisher_name: publisher }, WRITER_PAGES);
+    const bySeries = new Map<number, any[]>();
+    for (const x of items) {
+      if (!x.series || ctx.ownedSeries.has(x.series.id) || ctx.suggestedSeries.has(x.series.id)) continue;
+      if (isAnnual(x.series.name, x.number)) continue;
+      bySeries.set(x.series.id, [...(bySeries.get(x.series.id) ?? []), x]);
+    }
+    const runs = [...bySeries.values()].filter((l) => l.length >= 3)
+      .sort((a, b) => (a[0].series.year_began ?? 9999) - (b[0].series.year_began ?? 9999));
+    for (const run of runs.slice(0, 2)) {
+      const r = trimRun(run);
+      out.push({
+        kind: "writer", items: r, publisher, title: null, year: coverYear(r[0]), writer: name,
+        reason: `Weil du ${name} ${timesLabel(issueIds.length)} eine 9 oder 10 gegeben hast`,
+      });
+    }
+    log.push(`archive writer ${name}: ${runs.length}`);
+    if (out.length) break;
+  }
+  return out;
+}
+
+const classicKey = (c: Classic) => `archive:classic:${c.series}|${c.year}|${c.from ?? ""}`;
+
+/** One run from the built-in list, resolved against Metron. */
+async function resolveClassic(c: Classic): Promise<any[]> {
+  if (c.years) {
+    const items: any[] = [];
+    for (const y of c.years) {
+      items.push(...await metronAll("issue/", { series_name: c.series, series_year_began: c.year, publisher_name: c.publisher, cover_year: y }));
+    }
+    const seen = new Set<number>();
+    return items.filter((x) => {
+      const n = sortNumber(x.number);
+      if (seen.has(x.id) || !sameName(x.series?.name, c.series) || n === null || n < c.from! || n > c.to!) return false;
+      seen.add(x.id);
+      return true;
+    });
+  }
+  const items = (await metronAll("issue/", { series_name: c.series, series_year_began: c.year, publisher_name: c.publisher }))
+    .filter((x) => sameName(x.series?.name, c.series) && !isAnnual(x.series.name, x.number));
+  // Several volumes under one name: the one that began in that year.
+  const first = items.find((x) => x.series.year_began === c.year) ?? items[0];
+  return first ? items.filter((x) => x.series.id === first.series.id) : [];
+}
+
+async function classicDraft(ctx: ArchiveCtx, writers: Map<string, number[]>): Promise<Draft | null> {
+  const liked = (c: Classic) => (writers.has(c.writer) ? 0 : 1);
+  const todo = CLASSICS.map((c, k) => ({ c, k })).sort((a, b) => liked(a.c) - liked(b.c) || a.k - b.k).map((x) => x.c);
+  for (const c of todo) {
+    if (await getState(classicKey(c))) continue;
+    await setState(classicKey(c), new Date().toISOString());
+    const items = await resolveClassic(c);
+    if (!items.length || items.some((x) => ctx.ownedIssues.has(x.id))) continue;
+    if (ctx.suggestions.some((s) => s.series_id === items[0].series.id && s.issue_ids.includes(items[0].id))) continue;
+    const rated = writers.get(c.writer);
+    const run = [...items].sort(byIssueNumber);
+    return {
+      kind: "classic", items: run, publisher: c.publisher, title: c.title, year: coverYear(run[0]), writer: c.writer,
+      reason: rated ? `Weil du ${c.writer} ${timesLabel(rated.length)} eine 9 oder 10 gegeben hast` : "Aus der Klassiker-Liste",
+    };
+  }
+  return null;
+}
+
+/** An issue of a followed series line that came out this week 10, 20 or 30 years ago. */
+async function anniversaryDraft(ctx: ArchiveCtx, today: string): Promise<Draft | null> {
+  const monday = mondayOf(today);
+  const key = `archive:anniversary:${monday}`;
+  if (await getState(key)) return null;
+  await setState(key, new Date().toISOString());
+  const { data: fol, error } = await db.from("followed_series").select("series_id");
+  if (error) throw error;
+  const { data: ss, error: e2 } = await db.from("series").select("name, publisher").in("id", (fol ?? []).map((f) => f.series_id));
+  if (e2) throw e2;
+  const names = new Map<string, Set<string>>();
+  for (const s of ss ?? []) {
+    const pub = s.publisher === PUBLISHERS.Marvel ? PUBLISHERS.Marvel : PUBLISHERS.DC;
+    if (!names.has(pub)) names.set(pub, new Set());
+    names.get(pub)!.add(s.name.trim().toLowerCase());
+  }
+  for (const years of shuffle([10, 20, 30])) {
+    for (const [publisher, set] of names) {
+      const back = (iso: string) => `${Number(iso.slice(0, 4)) - years}${iso.slice(4)}`;
+      const page = await metron("issue/", { publisher_name: publisher, store_date_range_after: back(monday), store_date_range_before: back(shiftDays(monday, 6)) });
+      const hits = (page.results ?? []).filter((x: any) =>
+        x.series && set.has(String(x.series.name).trim().toLowerCase()) && !ctx.ownedIssues.has(x.id) && !isAnnual(x.series.name, x.number));
+      if (!hits.length) continue;
+      const pick = shuffle(hits)[0];
+      return {
+        kind: "anniversary", items: [pick], publisher, title: null, year: coverYear(pick), writer: pick.series.name,
+        reason: `Erschien diese Woche vor ${years} Jahren`, validFrom: monday,
+      };
+    }
+  }
+  return null;
+}
+
+/** In October and December: one holiday special from DC's archive. */
+async function seasonDraft(ctx: ArchiveCtx, today: string): Promise<Draft | null> {
+  const md = today.slice(5);
+  const year = today.slice(0, 4);
+  for (const season of ["hw", "xm"] as const) {
+    const s = SEASONS[season];
+    if (md < s.build || md > s.to) continue;
+    const validFrom = `${year}-${s.from}`;
+    if (ctx.suggestions.some((x) => x.kind === "season" && x.season === season && x.valid_from === validFrom && x.status !== "unavailable")) continue;
+    const key = `archive:season:${season}:${today}`;
+    if (await getState(key)) continue;
+    await setState(key, new Date().toISOString());
+    const seasonal = new Set(ctx.suggestions.filter((x) => x.kind === "season").map((x) => x.series_id));
+    for (const term of SEASON_TERMS[season]) {
+      const res = await metron("series/", { name: term, publisher_name: PUBLISHERS.DC });
+      const cands = shuffle((res.results ?? []).filter((r: any) => !seasonal.has(r.id) && !ctx.ownedSeries.has(r.id)));
+      for (const cand of cands.slice(0, 2)) {
+        const items = (await metronAll("issue/", { series_id: cand.id })).sort(byIssueNumber);
+        if (!items.length) continue;
+        return {
+          kind: "season", season, items: [items[0]], publisher: PUBLISHERS.DC, title: null, year: coverYear(items[0]), writer: null,
+          reason: season === "hw" ? "Ein Special für Halloween" : "Ein Special für Weihnachten", validFrom,
+        };
+      }
+    }
+  }
+  return null;
+}
+
+async function fillArchive(log: string[]) {
+  const today = berlinDay();
+  // Put back long enough ago: back in the box.
+  await db.from("archive_suggestions").update({ status: "open", decided_at: null })
+    .eq("status", "back").lt("decided_at", new Date(Date.now() - BACK_REST_D * 86400_000).toISOString());
+  const ctx = await archiveContext();
+  let added = 0;
+
+  const season = await seasonDraft(ctx, today);
+  if (season && await keep(ctx, season)) added++;
+  const anniversary = await anniversaryDraft(ctx, today);
+  if (anniversary && await keep(ctx, anniversary)) added++;
+
+  let open = ctx.suggestions.filter((s) => s.status === "open" && (s.kind === "writer" || s.kind === "classic")).length;
+  if (open < ARCHIVE_OPEN) {
+    const writers = await ratedWriters();
+    for (const d of await writerDrafts(ctx, writers, log)) {
+      if (open >= ARCHIVE_OPEN) break;
+      if (await keep(ctx, d)) { open++; added++; }
+    }
+    for (let tries = 0; open < ARCHIVE_OPEN && tries < 3; tries++) {
+      const d = await classicDraft(ctx, writers);
+      if (!d) break;
+      if (await keep(ctx, d)) { open++; added++; }
+    }
+  }
+  log.push(`archive: ${added} new, ${open} open`);
 }
 
 async function searchSeries(q: string) {

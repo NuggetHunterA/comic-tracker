@@ -24,6 +24,10 @@
 // publisher: the first issue sets it, issues of the other publisher wait for
 // an evening of their own, unless nothing of this publisher is left to read
 // or they were moved there by hand.
+//
+// Archive issues (taken from the Archivkiste) only fill what is left: each
+// evening takes its other issues first, archive issues get the empty places,
+// keeping to the evening's publisher. Moved by hand, they count like any other.
 import { addDays } from "./dates";
 import type { Format } from "./types";
 
@@ -42,6 +46,8 @@ export interface PlanIssue {
   event: { id: number; position: number } | null;
   /** Its publisher; an evening keeps to one. Unset: never holds an evening to one. */
   publisher?: string;
+  /** From the Archivkiste: only fills places no other issue takes. */
+  archive?: boolean;
 }
 
 /** The reader's series ranking: series ids in order, and those read to the end in one go. */
@@ -250,14 +256,18 @@ export function planEvenings(opts: {
     const entries: Evening["entries"] = [];
     const placed = new Set<number>();
     let publisher = d === 0 ? opts.readTodayPublisher : undefined;
-    // First the evening's own publisher, then (if room is left) whatever else is readable.
-    for (const strict of [true, false]) {
+    // First the evening's own publisher, then (if room is left) whatever else is readable;
+    // archive issues last, and only of the evening's publisher.
+    for (const pass of ["strict", "loose", "archive"] as const) {
+      const strict = pass !== "loose";
       const blockedSeries = new Set<number>();
       const blockedEvents = new Set<number>();
       for (const e of rest) {
         if (entries.length >= capacity) break;
         if (placed.has(e.issueId)) continue;
         const i = byId.get(e.issueId)!;
+        const filler = !!i.archive && !e.manual;
+        if (filler !== (pass === "archive")) continue;
         const blocked = blockedSeries.has(i.seriesId) || (i.event !== null && blockedEvents.has(i.event.id));
         const readable = !blocked && i.readableFrom !== null && i.readableFrom <= date;
         const fits = !strict || e.manual || !i.publisher || publisher === undefined || i.publisher === publisher;

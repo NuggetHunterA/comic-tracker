@@ -61,3 +61,21 @@ test("start, tabs, detail, back button and deep link", async ({ page }) => {
 
   expect(problems).toEqual([]);
 });
+
+test("Archivkiste: blind envelope on the empty evening, flyer in the thin week", async ({ page }) => {
+  const problems: string[] = [];
+  page.on("pageerror", (e) => problems.push(`${e.message}\n${e.stack}`));
+
+  await page.goto("/");
+  // Nothing on the pile is readable: tonight gets one blind envelope, the week the flyer.
+  await expect(page.getByText("Heute ist nichts lesbar. Dafür ist Post aus dem Archiv da.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Überraschung aus dem Archiv/ })).toHaveCount(1);
+  const flyer = page.getByRole("region", { name: "Aus dem Archiv" });
+  await expect(flyer.getByRole("button", { name: /^Umschlag aufreißen: \d{4}/ })).toHaveCount(2);
+
+  // Tearing one open shows what is inside and what to do with it.
+  await flyer.getByRole("button", { name: /^Umschlag aufreißen: \d{4}/ }).first().click();
+  await expect(flyer.getByRole("button", { name: "Auf den Stapel" })).toBeVisible();
+  await expect(flyer.getByRole("button", { name: "Zurück in die Kiste" })).toBeVisible();
+  expect(problems).toEqual([]);
+});

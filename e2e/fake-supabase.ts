@@ -9,6 +9,8 @@ const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISO
 export const SERIES = [
   { id: 1, name: "Absolute Batman", year_began: 2024, publisher: "DC Comics", volume: 1, status: "Ongoing" },
   { id: 2, name: "Ultimate Spider-Man", year_began: 2024, publisher: "Marvel", volume: 3, status: "Ongoing" },
+  { id: 3, name: "Batman", year_began: 1940, publisher: "DC Comics", volume: 1, status: "Completed" },
+  { id: 4, name: "The Vision", year_began: 2015, publisher: "Marvel", volume: 2, status: "Completed" },
 ];
 
 export const ISSUES = [
@@ -16,6 +18,24 @@ export const ISSUES = [
   { id: 102, series_id: 1, number: "2", sort_number: 2, store_date: day(-90), cover_url: null, is_annual: false },
   { id: 103, series_id: 1, number: "3", sort_number: 3, store_date: day(-60), cover_url: null, is_annual: false },
   { id: 201, series_id: 2, number: "1", sort_number: 1, store_date: day(-100), cover_url: null, is_annual: false },
+];
+
+// Older issues in the Archivkiste's envelopes.
+const old = (id: number, series_id: number, n: number, date: string) => ({ id, series_id, number: String(n), sort_number: n, store_date: date, cover_url: null, is_annual: false });
+export const ARCHIVE_ISSUES = [
+  ...[404, 405, 406, 407].map((n) => old(1000 + n, 3, n, "1987-02-01")),
+  ...[608, 609, 610, 611, 612, 613].map((n) => old(1000 + n, 3, n, "2002-12-01")),
+  ...[1, 2, 3, 4, 5, 6].map((n) => old(2000 + n, 4, n, "2015-11-04")),
+];
+
+const envelope = (id: number, kind: string, issue_ids: number[], extra: Record<string, unknown>) => ({
+  id, kind, season: null, series_id: 0, issue_ids, title: null, label_year: null, label_writer: null, reason: null,
+  verified: false, status: "open", taken_count: 0, valid_from: null, ...extra,
+});
+export const ARCHIVE = [
+  envelope(1, "classic", [1404, 1405, 1406, 1407], { series_id: 3, title: "Year One", label_year: 1987, label_writer: "Frank Miller", reason: "Aus der Klassiker-Liste", verified: true }),
+  envelope(2, "writer", [2001, 2002, 2003, 2004, 2005, 2006], { series_id: 4, label_year: 2015, label_writer: "Tom King", reason: "Weil du Tom King zweimal eine 9 oder 10 gegeben hast" }),
+  envelope(3, "classic", [1608, 1609, 1610, 1611, 1612, 1613], { series_id: 3, title: "Hush", label_year: 2002, label_writer: "Jeph Loeb", reason: "Aus der Klassiker-Liste", verified: true }),
 ];
 
 const pile = (issue_id: number) => ({ issue_id, status: "pile", format: "print", old_pile: false, bought_on: null, read_on: null, rating: null, skip_plan: false });
@@ -33,8 +53,9 @@ const TABLES: Record<string, unknown[]> = {
   events: [],
   event_issues: [],
   series_order: [],
+  archive_suggestions: ARCHIVE,
   series: SERIES,
-  issues: ISSUES,
+  issues: [...ISSUES, ...ARCHIVE_ISSUES],
 };
 
 export async function fakeSupabase(page: Page) {

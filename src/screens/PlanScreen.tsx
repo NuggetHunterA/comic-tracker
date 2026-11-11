@@ -9,9 +9,11 @@ import { useUndo } from "../lib/undo";
 import { RIP_RELEASE_MS, ripCover, tapeOn } from "../lib/rip";
 import { eventHex } from "../lib/events";
 import type { EventMark } from "../lib/store";
-import type { Issue, Series } from "../lib/types";
+import type { ArchiveSuggestion, Issue, Series } from "../lib/types";
 import { FORMAT_LABEL } from "../lib/labels";
 import { isSub, verlagOf } from "../lib/publisher";
+import { archiveKinds, blindEnvelope, boxEnvelopes, nextDays, restOf, seasonEnvelope, THIN_MIN_FREE } from "../lib/archive";
+import { ArchiveFlyer, BlindEnvelope, RestOfRun, SeasonFlyer } from "../components/ArchiveBox";
 
 const wait = (ms: number) => new Promise((done) => window.setTimeout(done, ms));
 
@@ -41,14 +43,27 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
       const it = v.order.map((i) => byId.get(i.id)).find((x) => x && x.ui.status !== "read");
       return it && !it.readable ? [{ v, it, part: v.order.findIndex((i) => i.id === it.issue.id) + 1 }] : [];
     });
-    return { tonight, next, soon, pileCount, readToday, waiting, paused };
+    // The Archivkiste: a thin week, an empty evening, the season.
+    const archive = data.archive ?? [];
+    const days = nextDays(plan, today);
+    const free = days.filter((d) => d.free).length;
+    const blind = tonight.length === 0 && readToday === 0 ? blindEnvelope(archive, today) : null;
+    const box = free >= THIN_MIN_FREE ? boxEnvelopes(archive, today, blind?.id) : [];
+    const week = box.length
+      ? days.map((d) => ({ date: d.date, list: plan.find((e) => e.date === d.date)?.entries.map((x) => resolve(x.issueId)) ?? [] }))
+      : next;
+    const season = seasonEnvelope(archive, today);
+    const rest = tonight.map(({ issue }) => restOf(archive, issue.id)).find(Boolean) ?? null;
+    const fromArchive = archiveKinds(archive);
+    const archiveIds = new Set(items.filter((i) => i.ui.archive).map((i) => i.issue.id));
+    return { tonight, next: week, soon, pileCount, readToday, waiting, paused, blind, box, free, season, rest, fromArchive, archiveIds };
   }, [data, plan, stalled, today, items, events]);
 
   const wall = useRef<HTMLElement>(null);
   useSlideOver(wall);
 
   if (!view) return null;
-  const { tonight, next, soon, pileCount, readToday, waiting, paused } = view;
+  const { tonight, next, soon, pileCount, readToday, waiting, paused, blind, box, free, season, rest, fromArchive, archiveIds } = view;
   const marks = tonight.map(({ issue }) => eventOf.get(issue.id));
   const banded = marks.some(Boolean);
 
@@ -92,6 +107,11 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
             ))}
           </section>
         </>
+      ) : blind ? (
+        <>
+          <span style={{ fontSize: 16 }}>Heute ist nichts lesbar. Dafür ist Post aus dem Archiv da.</span>
+          <BlindEnvelope envelope={blind} />
+        </>
       ) : (
         <div className="empty">
           <strong style={{ fontSize: 17 }}>{readToday > 0 ? "Für heute geschafft." : "Heute ist nichts lesbar."}</strong>
@@ -110,20 +130,30 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
           {items.length === 0 && <a className="btn solid" href="#stapel" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }}>Altbestand eintragen</a>}
         </div>
       )}
+      {rest && <RestOfRun envelope={rest.envelope} rest={rest.rest} />}
       <ErrorNote error={error} onRetry={retry} busy={busy} />
 
       {next.length > 0 && (
         <section aria-label="Die nächsten Abende" style={{ marginTop: 8, borderTop: "3px solid var(--ink)", display: "flex", flexDirection: "column" }}>
-          {next.map((e, k) => (
+          {next.map((e, k) => e.list.length === 0 ? (
+            <div key={e.date} className="evening free">
+              <span className="d">{dayLabel(e.date)}</span>
+              <span className="t">FREI</span>
+            </div>
+          ) : (
             <div key={e.date} className="evening">
-              <span className={`d ${k === next.length - 1 ? "mut" : ""}`}>{dayLabel(e.date)}</span>
-              <span className={k === next.length - 1 ? "mut" : ""} style={{ fontSize: 16 }}>
-                <PubDots list={e.list} /><EventTags issues={e.list.map((x) => x.issue)} marks={eventOf} />{runsLabel(e.list)}
+              <span className={`d ${k === next.length - 1 && !box.length ? "mut" : ""}`}>{dayLabel(e.date)}</span>
+              <span className={k === next.length - 1 && !box.length ? "mut" : ""} style={{ fontSize: 16 }}>
+                <PubDots list={e.list} /><EventTags issues={e.list.map((x) => x.issue)} marks={eventOf} />
+                <ArchiveTag ids={e.list.map((x) => x.issue.id)} archiveIds={archiveIds} from={fromArchive} />{runsLabel(e.list)}
               </span>
             </div>
           ))}
         </section>
       )}
+
+      {box.length > 0 && <ArchiveFlyer envelopes={box} free={free} />}
+      {season && <SeasonFlyer envelope={season} />}
 
       {(waiting.length > 0 || paused.length > 0) && (
         <section aria-label="Serien, die warten" style={{ borderTop: "3px solid var(--ink)", display: "flex", flexDirection: "column" }}>
@@ -184,6 +214,15 @@ function Band({ marks, k }: { marks: (EventMark | undefined)[]; k: number }) {
       {last && <span className="t">{parts}</span>}
     </span>
   );
+}
+
+/** "ARCHIV" (or "SAISON") in front of an evening that reads issues from the Archivkiste. */
+function ArchiveTag({ ids, archiveIds, from }: { ids: number[]; archiveIds: Set<number>; from: Map<number, ArchiveSuggestion> }) {
+  const hit = ids.find((id) => archiveIds.has(id));
+  if (hit === undefined) return null;
+  const s = from.get(hit);
+  if (s?.kind === "season") return <span className={`btag seasontag ${s.season ?? ""}`}>SAISON</span>;
+  return <span className="btag archtag">ARCHIV</span>;
 }
 
 /** The evening's publisher as a coloured dot (two when it had to fill up with the other one). */

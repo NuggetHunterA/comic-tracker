@@ -126,6 +126,44 @@ const days = (evenings: Evening[]) => evenings.map((e) => [e.date, e.entries.map
 const ids = (list: ListEntry[]) => list.map((e) => e.issueId);
 
 describe("planEvenings", () => {
+  it("lets archive issues fill only places no other issue takes", () => {
+    const issues = [
+      issue(1, 10, 1, { readableFrom: "2026-10-31" }),
+      issue(2, 10, 2, { readableFrom: "2026-10-31" }),
+      issue(3, 10, 3, { readableFrom: "2026-10-31" }),
+      issue(4, 10, 4, { readableFrom: "2026-10-31" }),
+      ...[1, 2, 3, 4, 5].map((n) => issue(100 + n, 90, n, { archive: true })),
+    ];
+    expect(days(plan(issues))).toEqual([
+      ["2026-10-29", [101, 102, 103]],
+      ["2026-10-30", [104, 105]],
+      ["2026-10-31", [1, 2, 3]],
+      ["2026-11-01", [4]],
+    ]);
+  });
+
+  it("gives archive issues the rest of an evening, keeping to its publisher", () => {
+    const issues = [
+      issue(1, 10, 1, { publisher: "dc" }),
+      issue(2, 10, 2, { publisher: "dc" }),
+      issue(201, 80, 1, { archive: true, publisher: "marvel" }),
+      issue(101, 90, 1, { archive: true, publisher: "dc" }),
+    ];
+    expect(days(plan(issues))).toEqual([
+      ["2026-10-29", [1, 2, 101]],
+      ["2026-10-30", [201]],
+    ]);
+  });
+
+  it("plans an archive issue moved by hand like any other", () => {
+    const issues = [1, 2, 3].map((n) => issue(n, 10, n)).concat(issue(101, 90, 1, { archive: true }));
+    const list = moveInList(sortList(issues), 101, 0);
+    expect(days(planEvenings({ list, issues, today: TODAY, maxPerEvening: 3 }))).toEqual([
+      ["2026-10-29", [101, 1, 2]],
+      ["2026-10-30", [3]],
+    ]);
+  });
+
   it("fills evenings up to the maximum and rolls on", () => {
     const issues = [1, 2, 3, 4, 5].map((n) => issue(n, 10, n));
     expect(days(plan(issues))).toEqual([

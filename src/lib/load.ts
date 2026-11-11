@@ -1,7 +1,7 @@
 // Loading: reads everything the app shows from Supabase in one go.
 import type { ListEntry } from "./plan";
 import { supabase } from "./supabase";
-import type { EventIssue, EventRow, Followed, Issue, Series, SeriesRank, Settings, UserIssue } from "./types";
+import type { ArchiveSuggestion, EventIssue, EventRow, Followed, Issue, Series, SeriesRank, Settings, UserIssue } from "./types";
 
 export interface Data {
   settings: Settings;
@@ -18,6 +18,8 @@ export interface Data {
   readingList: ListEntry[];
   /** The rules the list was last sorted by (see rulesKey). */
   listRules: string | null;
+  /** Archivkiste envelopes still in the box, and runs taken from it. */
+  archive: ArchiveSuggestion[];
 }
 
 const DEFAULT_SETTINGS: Settings = { infinite_delay_days: 30, webtoon_delay_days: 30, max_per_evening: 3 };
@@ -33,23 +35,27 @@ async function inChunks<T>(ids: number[], fetch: (chunk: number[]) => PromiseLik
 }
 
 export async function load(): Promise<Data> {
-  const [settings, followed, wishlist, dismissed, userIssues, list, events, eventIssues, seriesOrder] = await Promise.all([
+  const [settings, followed, wishlist, dismissed, userIssues, list, events, eventIssues, seriesOrder, archive] = await Promise.all([
     // All columns, so the app still loads where webtoon_delay_days is not migrated yet.
     supabase.from("settings").select("*").maybeSingle(),
     supabase.from("followed_series").select("series_id, default_format, paused, created_at"),
     supabase.from("wishlist_series").select("series_id"),
     supabase.from("dismissed_suggestions").select("series_id"),
-    supabase.from("user_issues").select("issue_id, status, format, old_pile, bought_on, read_on, rating, skip_plan"),
+    supabase.from("user_issues").select("*"),
     supabase.from("reading_list").select("issue_id, position, manual, added").order("position"),
     supabase.from("events").select("id, name, short, color, manual_order, created_at").order("created_at"),
     supabase.from("event_issues").select("event_id, issue_id, position"),
     supabase.from("series_order").select("series_id, position, whole").order("position"),
+    supabase.from("archive_suggestions").select("id, kind, season, series_id, issue_ids, title, label_year, label_writer, reason, verified, status, taken_count, valid_from")
+      .in("status", ["open", "taken"]).order("id"),
   ]);
   for (const r of [settings, followed, wishlist, dismissed, userIssues, list, events, eventIssues, seriesOrder]) if (r.error) throw r.error;
+  // Before migration 0015 the table is missing; the app works without the box.
+  const envelopes = archive.error ? [] : ((archive.data ?? []) as ArchiveSuggestion[]);
 
   const uis = (userIssues.data ?? []) as UserIssue[];
   const links = (eventIssues.data ?? []) as EventIssue[];
-  const issueIds = [...new Set([...uis.map((u) => u.issue_id), ...links.map((l) => l.issue_id)])];
+  const issueIds = [...new Set([...uis.map((u) => u.issue_id), ...links.map((l) => l.issue_id), ...envelopes.flatMap((a) => a.issue_ids)])];
   const issues = await inChunks<Issue>(issueIds, (c) =>
     supabase.from("issues").select("id, series_id, number, sort_number, store_date, cover_url, is_annual").in("id", c),
   );
@@ -79,6 +85,7 @@ export async function load(): Promise<Data> {
     seriesOrder: (seriesOrder.data ?? []) as SeriesRank[],
     readingList: ((list.data ?? []) as { issue_id: number; manual: boolean; added: boolean }[]).map((r) => ({ issueId: r.issue_id, manual: r.manual, added: r.added })),
     listRules: s?.list_rules ?? null,
+    archive: envelopes,
   };
 }
 

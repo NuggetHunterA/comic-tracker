@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import type { Session } from "@supabase/supabase-js";
-import { supabase } from "./lib/supabase";
 import { StoreProvider, useStore } from "./lib/store";
 import { monthLabel, monthStart } from "./lib/dates";
 import { Nav, TABS, type Tab } from "./components/Nav";
@@ -10,7 +8,6 @@ import { seriesLong } from "./lib/labels";
 import { IssueDetail } from "./components/IssueDetail";
 import { InfiniteDrop } from "./components/InfiniteDrop";
 import { ImportForm } from "./components/ImportForm";
-import { Login } from "./screens/Login";
 import { PlanScreen } from "./screens/PlanScreen";
 import { StapelList, StapelSeries, type StapelSel } from "./screens/StapelScreen";
 import { KatalogList } from "./screens/KatalogScreen";
@@ -53,24 +50,8 @@ function useTab(): Tab {
   return tab;
 }
 
+// Single-user app without sign-in: the database serves the owner's rows to the publishable key.
 export function App() {
-  const [session, setSession] = useState<Session | null | undefined>(undefined);
-  useEffect(() => {
-    const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (data.session) return setSession(data.session);
-      // Single-user app: sign in with the app account if the build has one, else show the form.
-      const { VITE_APP_EMAIL: email, VITE_APP_PASSWORD: password } = import.meta.env;
-      if (email && password) {
-        const { data: signed } = await supabase.auth.signInWithPassword({ email, password });
-        if (signed.session) return setSession(signed.session);
-      }
-      setSession(null);
-    });
-    return () => data.subscription.unsubscribe();
-  }, []);
-  if (session === undefined) return null;
-  if (!session) return <Login />;
   return (
     <StoreProvider>
       <UndoProvider>
@@ -98,7 +79,7 @@ function Shell() {
   const [serienSel, setSerienSel] = useState<SerienSel>(null);
 
   const tonight = plan.find((e) => e.date === today)?.entries ?? [];
-  const pile = items.filter((i) => (i.ui.status === "pile" || i.ui.status === "expected") && i.readable).length;
+  const pile = items.filter((i) => i.ui.status === "pile" && i.readable).length;
   const counters: Record<Tab, string> = {
     plan: `${tonight.length} HEUTE`,
     stapel: String(pile),

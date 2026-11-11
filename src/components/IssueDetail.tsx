@@ -393,7 +393,7 @@ function RangeAction({ issue, mode, format }: { issue: Issue; mode: "read" | "pi
       }
       const ids = rows.filter((r) => {
         const st = data?.userIssues.get(r.id)?.status;
-        return st !== "pile" && st !== "expected" && st !== "read";
+        return st !== "pile" && st !== "read";
       }).map((r) => r.id);
       const end = mode === "read" ? rows[0]?.number : rows[rows.length - 1]?.number;
       setTodo({ ids, end: end ?? issue.number });

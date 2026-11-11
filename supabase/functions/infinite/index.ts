@@ -152,9 +152,7 @@ Deno.serve(async (req) => {
       if (!secret?.value || req.headers.get("x-cron-secret") !== secret.value) return json({ error: "unauthorized" }, 401);
       return json({ message: await syncConnect() });
     }
-    const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-    const { data: user } = await db.auth.getUser(token);
-    if (!user?.user) return json({ error: "unauthorized" }, 401);
+    // No sign-in in this single-user app: the app calls with the publishable key only.
 
     if (body.action === "issue") return json({ url: await issueLink(Number(body.issue_id)) });
     if (body.action === "connect") return json({ message: await syncConnect() });

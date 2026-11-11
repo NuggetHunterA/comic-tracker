@@ -26,9 +26,9 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
     const tonight = plan.find((e) => e.date === today)?.entries.map((e) => resolve(e.issueId)) ?? [];
     const next = plan.filter((e) => e.date > today).slice(0, 6).map((e) => ({ date: e.date, list: e.entries.map((x) => resolve(x.issueId)) }));
     const soon = items
-      .filter((i) => (i.ui.status === "pile" || i.ui.status === "expected") && isSub(i.ui.format) && i.readableFrom && i.readableFrom > today)
+      .filter((i) => i.ui.status === "pile" && isSub(i.ui.format) && i.readableFrom && i.readableFrom > today)
       .sort((a, b) => a.readableFrom!.localeCompare(b.readableFrom!))[0];
-    const pileCount = items.filter((i) => (i.ui.status === "pile" || i.ui.status === "expected") && i.readable).length;
+    const pileCount = items.filter((i) => i.ui.status === "pile" && i.readable).length;
     const readToday = items.filter((i) => i.ui.status === "read" && i.ui.read_on === today).length;
     const byId = new Map(items.map((i) => [i.issue.id, i]));
     const waiting = stalled.flatMap(({ issueId, behind }) => {

@@ -41,6 +41,11 @@ interface Store {
   markRead: (issueId: number) => Promise<void>;
   /** A rating that waits for the network when there is none. */
   rate: (issueId: number, rating: number | null) => Promise<void>;
+  /**
+   * Takes back writes for an issue that still wait for the network and puts the
+   * local copy back to `before`. True when a waiting "Gelesen" was among them.
+   */
+  takeBack: (issueId: number, before: Partial<UserIssue>) => Promise<boolean>;
   today: string;
   items: Item[];
   plan: Evening[];
@@ -187,6 +192,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
   const markRead = useCallback((issueId: number) => later({ kind: "read", issueId, day: todayIso() }), [later]);
   const rate = useCallback((issueId: number, rating: number | null) => later({ kind: "rate", issueId, rating }), [later]);
+  const takeBack = useCallback(async (issueId: number, before: Partial<UserIssue>) => {
+    const q = await getQueue();
+    const mine = q.filter((o) => o.issueId === issueId);
+    if (!mine.length) return false;
+    setQueue(q.filter((o) => o.issueId !== issueId));
+    setData((d) => {
+      const ui = d?.userIssues.get(issueId);
+      if (!d || !ui) return d;
+      const userIssues = new Map(d.userIssues);
+      userIssues.set(issueId, { ...ui, ...before });
+      return { ...d, userIssues };
+    });
+    return mine.some((o) => o.kind === "read");
+  }, []);
 
   const remember = useCallback((issues: Issue[], series: Series[]) => {
     for (const i of issues) extra.current.issues.set(i.id, i);
@@ -228,8 +247,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const { plan, list, stalled, resort, moveTo, release } = useListSync(data, setData, setError, items, today, events, eventOf, offline !== null);
 
   const value = useMemo(
-    () => ({ data, error, offline, queued, backOnline, markRead, rate, today, items, plan, list, resort, moveTo, release, events, eventOf, stalled, reload, remember }),
-    [data, error, offline, queued, backOnline, markRead, rate, today, items, plan, list, resort, moveTo, release, events, eventOf, stalled, reload, remember],
+    () => ({ data, error, offline, queued, backOnline, markRead, rate, takeBack, today, items, plan, list, resort, moveTo, release, events, eventOf, stalled, reload, remember }),
+    [data, error, offline, queued, backOnline, markRead, rate, takeBack, today, items, plan, list, resort, moveTo, release, events, eventOf, stalled, reload, remember],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

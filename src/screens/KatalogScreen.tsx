@@ -8,6 +8,8 @@ import { Cover } from "../components/Cover";
 import { ConnectFlyer } from "../components/ConnectFlyer";
 import { useConnect } from "../lib/connect";
 import { infiniteHref } from "../lib/infiniteLink";
+import { ErrorNote } from "../components/ErrorNote";
+import { report } from "../lib/errors";
 import { useSyncStatus } from "../lib/syncStatus";
 import { isNetworkError, stampLabel } from "../lib/offline";
 
@@ -27,7 +29,8 @@ export function KatalogList({ month, setMonth, selected, onSelect }: {
   const [mine, setMine] = useState(false);
   const [firsts, setFirsts] = useState(false);
   const [rows, setRows] = useState<Row[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ text: string; retry: () => void } | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const { connect, markRead } = useConnect(today);
   const [noNet, setNoNet] = useState(false);
   const sync = useSyncStatus(`${today}|${month}|${offline ? "off" : "on"}`);
@@ -49,13 +52,13 @@ export function KatalogList({ month, setMonth, selected, onSelect }: {
       .then(({ data: d, error: e }) => {
         if (stale) return;
         if (e && isNetworkError(e)) return setNoNet(true);
-        if (e) setError(e.message);
+        if (e) setError({ text: report(e), retry: () => setAttempt((n) => n + 1) });
         const list = (d ?? []) as unknown as Row[];
         setRows(list);
         remember(list.map(({ series: _s, ...i }) => i), list.map((r) => r.series));
       });
     return () => { stale = true; };
-  }, [month, verlag, remember, offline]);
+  }, [month, verlag, remember, offline, attempt]);
 
   const followed = useMemo(() => new Set(data?.followed.map((f) => f.series_id)), [data]);
   const shown = useMemo(() => {
@@ -120,14 +123,17 @@ export function KatalogList({ month, setMonth, selected, onSelect }: {
           latest={connect.latest}
           next={connect.next}
           href={infiniteHref(connect.latest.url)}
-          onRead={() => markRead().catch((e) => setError((e as { message?: string })?.message ?? String(e)))}
+          onRead={function read() {
+            setError(null);
+            markRead().catch((e) => setError({ text: report(e), retry: read }));
+          }}
         />
       )}
       {!noNet && <div className="chips">
         <button type="button" className={`chip ${mine ? "on" : ""}`} aria-pressed={mine} onClick={() => setMine(!mine)}>Meine Serien</button>
         <button type="button" className={`chip ${firsts ? "on" : ""}`} aria-pressed={firsts} onClick={() => setFirsts(!firsts)}>#1 &amp; Neustarts</button>
       </div>}
-      {error && <p role="alert" className="stk" style={{ whiteSpace: "normal" }}>{error}</p>}
+      <ErrorNote error={error?.text ?? null} onRetry={error?.retry} />
       {noNet && (
         <div className="empty">
           <strong style={{ fontSize: 17 }}>Der Katalog braucht Netz.</strong>
@@ -136,7 +142,7 @@ export function KatalogList({ month, setMonth, selected, onSelect }: {
         </div>
       )}
       {rows === null && !error && !noNet && <p className="d mut">LÄDT …</p>}
-      {rows !== null && shown.length === 0 && (
+      {rows !== null && !error && shown.length === 0 && (
         <div className="empty">
           <strong>Hier ist noch nichts.</strong>
           <span className="mut">{rows.length === 0 ? "Der Katalog für diesen Monat wird nachts von Metron geholt. Schau morgen wieder rein." : "Kein Heft passt zu den Filtern."}</span>

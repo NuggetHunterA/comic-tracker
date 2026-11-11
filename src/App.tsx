@@ -15,6 +15,10 @@ import { SerienList, SeriesDetail } from "./screens/SerienScreen";
 import { EventDetail } from "./components/EventDetail";
 import { SeriesOrder } from "./components/SeriesOrder";
 import { IssueOrder } from "./components/IssueOrder";
+import { ErrorNote } from "./components/ErrorNote";
+import { explain } from "./lib/errors";
+import { UndoProvider } from "./lib/undo";
+import { UndoStrip } from "./components/UndoStrip";
 import { backTo, navigate, onRouteChange, parseRoute, type Route, type SerienSel, type SerienTab, type StapelSel } from "./lib/route";
 import { OfflineStrip } from "./components/OfflineStrip";
 
@@ -44,7 +48,9 @@ function useRoute(): Route {
 export function App() {
   return (
     <StoreProvider>
-      <Shell />
+      <UndoProvider>
+        <Shell />
+      </UndoProvider>
     </StoreProvider>
   );
 }
@@ -53,7 +59,12 @@ function Shell() {
   const wide = useWide();
   const route = useRoute();
   const { tab } = route;
-  const { data, error, plan, today, items } = useStore();
+  const { data, error, plan, today, items, reload } = useStore();
+  const [retrying, setRetrying] = useState(false);
+  const retry = useCallback(() => {
+    setRetrying(true);
+    void reload().finally(() => setRetrying(false));
+  }, [reload]);
 
   // What is open on each tab lives in the URL, so the back button closes it and a link opens it.
   const planSel = route.tab === "plan" ? route.sel : null;
@@ -158,11 +169,12 @@ function Shell() {
       <div className="panes">
         <OfflineStrip />
         <main className={`pane list ${wideList ? "wide" : ""}`}>
-          {error && <p role="alert" className="stk" style={{ whiteSpace: "normal" }}>Fehler beim Laden: {error}</p>}
+          <ErrorNote error={error && explain(error)} onRetry={retry} busy={retrying} />
           {!data && !error ? <p className="d mut">LÄDT …</p> : list}
         </main>
         {data && detail}
       </div>
+      {data && <UndoStrip />}
       {data && <InfiniteDrop />}
     </div>
   );

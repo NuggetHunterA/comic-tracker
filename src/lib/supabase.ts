@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { Hinweis } from "./errors";
 
 export const SUPABASE_URL = "https://towpmroicvnsbobktsfz.supabase.co";
 // Publishable key: ships in the browser. There is no sign-in, RLS hands it the owner's rows (migration 0013).
@@ -21,8 +22,10 @@ export async function infinite<T>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke("infinite", { body });
   if (error) {
     // The function explains a rejected link in its JSON body.
-    const detail = await (error as { context?: Response }).context?.json?.().catch(() => null);
-    throw new Error(detail?.error ?? error.message);
+    const res = (error as { context?: Response }).context;
+    const detail = res?.status === 400 ? await res.json?.().catch(() => null) : null;
+    if (detail?.error) throw new Hinweis(detail.error);
+    throw error;
   }
   return data as T;
 }

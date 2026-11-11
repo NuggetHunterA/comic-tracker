@@ -9,6 +9,7 @@ import { Cover } from "../components/Cover";
 import { FormatChips } from "../components/FormatChips";
 import { SeriesSearch, type FoundSeries } from "../components/SeriesSearch";
 import { useRun } from "../components/useRun";
+import { ErrorNote } from "../components/ErrorNote";
 import { AllIssues, useSeriesRange } from "../components/AllIssues";
 import { isFresh, markFresh } from "../lib/motion";
 import { NewEvent, Ticks } from "../components/EventDetail";
@@ -148,7 +149,7 @@ export function SerienList({ tab, setTab, sel, onSelect }: {
           {done.length > 0 && (
             <details open={done.some((v) => sel?.kind === "event" && sel.id === v.event.id)}>
               <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 15, minHeight: 40, display: "flex", alignItems: "center" }}>Durchgelesen · {done.length}</summary>
-              <div style={{ display: "flex", flexDirection: "column", gap: 4, opacity: 0.75 }}>
+              <div className="evdone" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 {done.map(eventRow)}
               </div>
             </details>
@@ -177,8 +178,8 @@ export function SerienList({ tab, setTab, sel, onSelect }: {
               const on = (sel?.kind === "series" || sel?.kind === "all") && sel.id === f.series_id;
               const ended = s?.status && /cancel|complet|end/i.test(s.status);
               return (
-                <button key={f.series_id} type="button" className={`sr ${on ? "on" : ""}`} aria-current={on ? "true" : undefined}
-                  style={f.paused ? { opacity: 0.6 } : undefined} onClick={() => onSelect({ kind: "series", id: f.series_id })}>
+                <button key={f.series_id} type="button" className={`sr ${on ? "on" : ""} ${f.paused ? "paused" : ""}`} aria-current={on ? "true" : undefined}
+                  onClick={() => onSelect({ kind: "series", id: f.series_id })}>
                   {cover ? <Cover issue={cover} showNumber={false} /> : <span className="cv" style={{ width: 36, flex: "none", backgroundColor: "#2a2a2a" }} />}
                   <span style={{ flex: 1, display: "flex", flexDirection: "column" }}>
                     <strong style={{ fontSize: 16 }}>{seriesLong(s)}</strong>
@@ -234,7 +235,7 @@ export function SeriesDetail({ seriesId, found, onSelect, onGone }: {
   seriesId: number; found?: FoundSeries; onSelect: (s: SerienSel) => void; onGone: () => void;
 }) {
   const { data, items } = useStore();
-  const { run, busy, error } = useRun();
+  const { run, retry, busy, error } = useRun();
   const relaunches = useRelaunches();
   const range = useSeriesRange(seriesId);
   const [justFollowed] = useState(() => isFresh(`follow:${seriesId}`));
@@ -285,14 +286,14 @@ export function SeriesDetail({ seriesId, found, onSelect, onGone }: {
         </div>
         {isDC && <InfiniteSeriesLink seriesId={seriesId} />}
       </div>
-      {error && <p role="alert" className="stk" style={{ whiteSpace: "normal" }}>{error}</p>}
+      <ErrorNote error={error} onRetry={retry} busy={busy} />
     </>
   );
 }
 
 /** The series page on Infinite, pasted by hand when the lookup cannot find it. */
 function InfiniteSeriesLink({ seriesId }: { seriesId: number }) {
-  const { run, busy, error } = useRun();
+  const { run, retry, busy, error } = useRun();
   const [saved, setSaved] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   useEffect(() => {
@@ -325,7 +326,7 @@ function InfiniteSeriesLink({ seriesId }: { seriesId: number }) {
           <button type="submit" className="btn solid" disabled={busy || !draft.trim()}>Link speichern</button>
           {saved && <button type="button" className="btn" disabled={busy} onClick={() => save(null)}>Link entfernen</button>}
         </div>
-        {error && <p role="alert" className="stk" style={{ whiteSpace: "normal" }}>{error}</p>}
+        <ErrorNote error={error} onRetry={retry} busy={busy} />
       </form>
     </details>
   );
@@ -343,7 +344,7 @@ export function AllIssuesButton({ range, onClick }: { range: string | null; onCl
 /** A series found by search: no pile yet, so the whole run shows right away. */
 function UnfollowedSeries({ seriesId, found, onSelect }: { seriesId: number; found?: FoundSeries; onSelect: (s: SerienSel) => void }) {
   const { data } = useStore();
-  const { run, busy, error } = useRun();
+  const { run, retry, busy, error } = useRun();
   const s = data?.series.get(seriesId);
   const publisher = s?.publisher ?? found?.publisher ?? null;
   const fmt = defaultFormatOf({ publisher });
@@ -364,7 +365,7 @@ function UnfollowedSeries({ seriesId, found, onSelect }: { seriesId: number; fou
       </div>
       <button type="button" className="btn hot" disabled={busy} onClick={() => run(follow)}>{busy ? "Folge …" : "Folgen"}</button>
       <span className="mut" style={{ fontSize: 14, marginTop: -6 }}>{isSub(fmt) ? `Ab dann landen neue Hefte als ${FORMAT_LABEL[fmt]} auf dem Stapel. Das Format kannst du danach ändern.` : "Ab dann landen neue Hefte als Print auf dem Stapel."}</span>
-      {error && <p role="alert" className="stk" style={{ whiteSpace: "normal" }}>{error}</p>}
+      <ErrorNote error={error} onRetry={retry} busy={busy} />
       <AllIssues seriesId={seriesId} title={false}
         onSelect={(id) => onSelect({ kind: "issue", id, back: { kind: "series", id: seriesId, found } })} />
     </>

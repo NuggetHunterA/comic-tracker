@@ -4,6 +4,8 @@ import { dayLabel, shortDate } from "../lib/dates";
 import { issueTitle, runsLabel } from "../lib/labels";
 import { Cover } from "../components/Cover";
 import { useRun } from "../components/useRun";
+import { ErrorNote } from "../components/ErrorNote";
+import { useUndo } from "../lib/undo";
 import { RIP_RELEASE_MS, ripCover, tapeOn } from "../lib/rip";
 import { eventHex } from "../lib/events";
 import type { EventMark } from "../lib/store";
@@ -15,7 +17,8 @@ const wait = (ms: number) => new Promise((done) => window.setTimeout(done, ms));
 
 export function PlanScreen({ selected, onSelect }: { selected: number | null; onSelect: (id: number) => void }) {
   const { data, plan, stalled, today, items, events, eventOf, markRead: read } = useStore();
-  const { run, busy, error } = useRun();
+  const { run, retry, busy, error } = useRun();
+  const { snapshot, offerRead } = useUndo();
 
   const view = useMemo(() => {
     if (!data) return null;
@@ -53,7 +56,11 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
   const markRead = async (issueId: number, card: HTMLElement | null) => {
     const cv = card?.querySelector<HTMLElement>(".cv");
     const rip = cv ? ripCover(cv) : null;
-    const ok = await run(() => Promise.all([read(issueId), wait(RIP_RELEASE_MS)]));
+    const before = snapshot(issueId);
+    const ok = await run(async () => {
+      await Promise.all([read(issueId), wait(RIP_RELEASE_MS)]);
+      if (before) offerRead(before);
+    });
     if (!ok) rip?.restore();
   };
 
@@ -103,7 +110,7 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
           {items.length === 0 && <a className="btn solid" href="#stapel" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }}>Altbestand eintragen</a>}
         </div>
       )}
-      {error && <p role="alert" className="stk" style={{ whiteSpace: "normal" }}>{error}</p>}
+      <ErrorNote error={error} onRetry={retry} busy={busy} />
 
       {next.length > 0 && (
         <section aria-label="Die nächsten Abende" style={{ marginTop: 8, borderTop: "3px solid var(--ink)", display: "flex", flexDirection: "column" }}>

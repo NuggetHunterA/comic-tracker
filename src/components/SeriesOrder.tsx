@@ -3,6 +3,7 @@ import { actions, useStore } from "../lib/store";
 import { runsLabel, seriesTitle } from "../lib/labels";
 import { Cover } from "./Cover";
 import { useRun } from "./useRun";
+import { ErrorNote } from "./ErrorNote";
 
 /** The line in the list: series above it are read to the end in one go. */
 const LINE = -1;
@@ -20,7 +21,7 @@ const GRIP = (
  */
 export function SeriesOrder() {
   const { data, items, plan } = useStore();
-  const { run, busy, error } = useRun();
+  const { run, retry, busy, error } = useRun();
 
   const { saved, open, firstIssue } = useMemo(() => {
     const open = new Map<number, number>();
@@ -158,7 +159,7 @@ export function SeriesOrder() {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true"><rect x="5" y="11" width="14" height="9" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
         Wenn du hier etwas änderst, wird die Leseliste neu sortiert. Altbestand zuerst, Nummernfolge, Events und von Hand verschobene Hefte bleiben.
       </span>
-      {error && <p role="alert" className="stk" style={{ whiteSpace: "normal" }}>{error}</p>}
+      <ErrorNote error={error} onRetry={retry} busy={busy} />
       {data.seriesOrder.length > 0 && (
         <button type="button" className="btn dashed" style={{ alignSelf: "flex-start" }} disabled={busy}
           onClick={() => run(() => actions.sortSeriesByDate())}>Nach Erscheinungsdatum sortieren</button>

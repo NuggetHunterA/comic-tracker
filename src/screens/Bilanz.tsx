@@ -90,11 +90,12 @@ export function Bilanz({ sel, onSelect }: { sel: StapelSel; onSelect: (s: Stapel
         </div>
       </section>
 
+      {stats.year > 0 && <WallEntry reads={reads} today={today} count={stats.year} onOpen={() => onSelect({ kind: "year", year: Number(today.slice(0, 4)) })} />}
+
       <Verlage reads={reads} from={weeks[0].start} today={today} />
 
       <section aria-label="Zahlen" className="bz-kv">
         <div className="kv"><span>{monthLabel(today)}</span><span>{hefte(stats.month)}</span></div>
-        <div className="kv"><span>{today.slice(0, 4)}</span><span>{hefte(stats.year)}</span></div>
         <div className="kv"><span>GESAMT</span><span>{hefte(stats.total)} gelesen</span></div>
         <div className="kv"><span>Ø NOTE</span><span>{stats.avg === null ? "noch keine Noten" : <>{gradeLabel(stats.avg)} <span className="mut">aus {stats.rated} {stats.rated === 1 ? "Note" : "Noten"}</span></>}</span></div>
       </section>
@@ -173,6 +174,24 @@ export function Bilanz({ sel, onSelect }: { sel: StapelSel; onSelect: (s: Stapel
         </section>
       )}
     </div>
+  );
+}
+
+/** The way to the Jahreswand: the year's latest covers in a row on a black strip. */
+function WallEntry({ reads, today, count, onOpen }: { reads: ReturnType<typeof useStore>["items"]; today: string; count: number; onOpen: () => void }) {
+  const year = today.slice(0, 4);
+  const latest = reads.filter((i) => i.ui.read_on && i.ui.read_on.slice(0, 4) === year && i.ui.read_on <= today)
+    .sort((a, b) => (a.ui.read_on ?? "").localeCompare(b.ui.read_on ?? "")).slice(-12);
+  const best = reads.filter((i) => i.ui.read_on?.slice(0, 4) === year && i.ui.rating !== null)
+    .sort((a, b) => (b.ui.rating ?? 0) - (a.ui.rating ?? 0) || (b.ui.read_on ?? "").localeCompare(a.ui.read_on ?? ""))[0];
+  return (
+    <button type="button" className="jw-entry" onClick={onOpen} aria-label={`Jahreswand ${year} öffnen: ${hefte(count)}`}>
+      <span className="row"><h2>{year} <span>{count}</span></h2><span className="go">WAND ÖFFNEN ›</span></span>
+      <span className="jw-mini" aria-hidden="true">
+        {latest.map((i, k) => <Cover key={i.issue.id} issue={i.issue} showNumber={false} publisherMark={false} eventMark={false} style={{ ["--r" as string]: `${(k % 3) - 1}deg` }} />)}
+      </span>
+      <span className="d sub">{count === 1 ? "HEFT" : "HEFTE"} AN DER WAND{best ? ` · BESTES: ${issueTitle(best.issue, best.series).toUpperCase()}` : ""}</span>
+    </button>
   );
 }
 

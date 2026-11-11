@@ -49,10 +49,14 @@ export function useStapel(filter: Filter) {
   }, [items, plan, filter]);
 }
 
+/** The Bilanz stays open while the Jahreswand is on top of it, so going back lands there again. */
+let bilanzOpen = false;
+
 export function StapelList({ wide, sel, onSelect }: { wide: boolean; sel: StapelSel; onSelect: (s: StapelSel) => void }) {
   const [filter, setFilter] = useState<Filter>("alle");
   const [view, setView] = useState<"serie" | "reihenfolge">("serie");
-  const [bilanz, setBilanz] = useState(false);
+  const [bilanz, setBilanzState] = useState(bilanzOpen);
+  const setBilanz = (on: boolean) => { bilanzOpen = on; setBilanzState(on); };
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const { readable, expected, groups } = useStapel(filter);
   const reading = filter === "gelesen";

@@ -10,6 +10,7 @@ import { InfiniteDrop } from "./components/InfiniteDrop";
 import { ImportForm } from "./components/ImportForm";
 import { PlanScreen } from "./screens/PlanScreen";
 import { StapelList, StapelSeries } from "./screens/StapelScreen";
+import { Jahreswand } from "./screens/Jahreswand";
 import { KatalogList } from "./screens/KatalogScreen";
 import { SerienList, SeriesDetail } from "./screens/SerienScreen";
 import { EventDetail } from "./components/EventDetail";
@@ -19,7 +20,7 @@ import { ErrorNote } from "./components/ErrorNote";
 import { explain } from "./lib/errors";
 import { UndoProvider } from "./lib/undo";
 import { UndoStrip } from "./components/UndoStrip";
-import { backTo, navigate, onRouteChange, parseRoute, type Route, type SerienSel, type SerienTab, type StapelSel } from "./lib/route";
+import { backTo, navigate, onRouteChange, replaceRoute, parseRoute, type Route, type SerienSel, type SerienTab, type StapelSel } from "./lib/route";
 import { OfflineStrip } from "./components/OfflineStrip";
 
 // Two panes only when there is room for both: wide screens, or a Fold opened in landscape.
@@ -106,12 +107,25 @@ function Shell() {
   let list: React.ReactNode = null;
   let detail: React.ReactNode = null;
   let wideList = false;
+  let listClass = "";
 
   if (tab === "plan") {
     list = <PlanScreen selected={planShown} onSelect={setPlanSel} />;
     detail = planShown ? (
       <Detail wide={wide} label="Heft im Detail" onClose={closePlan}><IssueDetail issueId={planShown} onClose={closePlan} /></Detail>
     ) : wide ? <Detail wide label="Heft im Detail" onClose={closePlan}><EmptyDetail text="Tipp ein Heft an, um es zu bewerten, zu verschieben oder aus dem Plan zu nehmen." /></Detail> : null;
+  } else if (tab === "stapel" && stapelSel?.kind === "year") {
+    // The Jahreswand takes the whole screen; an issue tapped on it opens beside it, or as a sheet over it.
+    const y = stapelSel;
+    const closeIssue = () => backStapel({ kind: "year", year: y.year });
+    list = <Jahreswand year={y.year} wide={wide} selected={y.issue}
+      onIssue={(id) => navigate({ tab: "stapel", sel: { kind: "year", year: y.year, issue: id } })}
+      onYear={(year) => replaceRoute({ tab: "stapel", sel: { kind: "year", year } })}
+      onBack={closeStapel} />;
+    listClass = `jwpane ${y.issue !== undefined ? "withdetail" : ""}`;
+    detail = y.issue !== undefined ? (
+      <Detail wide={wide} label="Heft im Detail" onClose={closeIssue}><IssueDetail issueId={y.issue} onClose={closeIssue} /></Detail>
+    ) : null;
   } else if (tab === "stapel") {
     list = <StapelList wide={wide} sel={stapelSel} onSelect={setStapelSel} />;
     const s = stapelSel;
@@ -168,7 +182,7 @@ function Shell() {
       <Nav tab={tab} counters={counters} />
       <div className="panes">
         <OfflineStrip />
-        <main className={`pane list ${wideList ? "wide" : ""}`}>
+        <main className={`pane list ${wideList ? "wide" : ""} ${listClass}`}>
           <ErrorNote error={error && explain(error)} onRetry={retry} busy={retrying} />
           {!data && !error ? <p className="d mut">LÄDT …</p> : list}
         </main>

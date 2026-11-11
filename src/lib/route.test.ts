@@ -14,6 +14,8 @@ const routes: [string, Route][] = [
   ["#stapel/eintragen", { tab: "stapel", sel: { kind: "import" } }],
   ["#stapel/serien-ordnen", { tab: "stapel", sel: { kind: "order" } }],
   ["#stapel/reihenfolge", { tab: "stapel", sel: { kind: "list" } }],
+  ["#stapel/jahr/2026", { tab: "stapel", sel: { kind: "year", year: 2026 } }],
+  ["#stapel/jahr/2026/heft/12", { tab: "stapel", sel: { kind: "year", year: 2026, issue: 12 } }],
   ["#katalog", { tab: "katalog", sel: null }],
   ["#katalog/heft/12", { tab: "katalog", sel: 12 }],
   ["#serien", { tab: "serien", sub: "serien", sel: null }],

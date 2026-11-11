@@ -3,3 +3,5 @@ dist
 .DS_Store
 *.local
 .impeccable/live
+test-results
+playwright-report

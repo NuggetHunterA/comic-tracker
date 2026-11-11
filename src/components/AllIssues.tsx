@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isSub } from "../lib/publisher";
 import { metron, supabase } from "../lib/supabase";
 import { useStore } from "../lib/store";
@@ -7,6 +7,8 @@ import { readableFrom } from "../lib/plan";
 import { issueTitle, seriesLong } from "../lib/labels";
 import type { Issue, Series, UserIssue } from "../lib/types";
 import { Cover } from "./Cover";
+import { ErrorNote } from "./ErrorNote";
+import { report } from "../lib/errors";
 
 const ISSUE_COLS = "id, series_id, number, sort_number, store_date, cover_url, is_annual";
 const BLOCK = 20;
@@ -30,6 +32,8 @@ export function useSeriesIssues(seriesId: number) {
   const [series, setSeries] = useState<Series | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
   useEffect(() => {
     let stale = false;
@@ -61,13 +65,14 @@ export function useSeriesIssues(seriesId: number) {
       .catch((e) => {
         if (stale) return;
         const msg = (e as { message?: string })?.message ?? String(e);
-        setError(/429|rate/i.test(msg) ? "Metron bremst gerade. Versuch es in einer Minute noch einmal." : msg);
+        const status = (e as { context?: { status?: number } })?.context?.status;
+        setError(status === 429 || /429|rate/i.test(msg) ? "Metron bremst gerade. Versuch es in einer Minute nochmal." : report(e));
       })
       .finally(() => !stale && setSyncing(false));
     return () => { stale = true; };
-  }, [seriesId, remember]);
+  }, [seriesId, remember, attempt]);
 
-  return { issues, series, syncing, error };
+  return { issues, series, syncing, error, retry };
 }
 
 /** Number range for the "Alle Hefte" button, from the issues already stored. */
@@ -99,7 +104,7 @@ export function AllIssues({ seriesId, onSelect, sel, head, title = true }: {
   head?: React.ReactNode;
 }) {
   const { data, today } = useStore();
-  const { issues, series, syncing, error } = useSeriesIssues(seriesId);
+  const { issues, series, syncing, error, retry } = useSeriesIssues(seriesId);
   const [filter, setFilter] = useState<Filter>("alle");
   const [jump, setJump] = useState("");
   const [mark, setMark] = useState<number | null>(sel ?? null);
@@ -194,7 +199,7 @@ export function AllIssues({ seriesId, onSelect, sel, head, title = true }: {
           {syncing && <span className="mut" style={{ fontSize: 14 }}>Beim ersten Mal dauert das bei langen Serien bis zu einer Minute. Danach öffnet die Serie sofort.</span>}
         </div>
       )}
-      {error && <p role="alert" className="stk" style={{ whiteSpace: "normal" }}>{error}</p>}
+      <ErrorNote error={error} onRetry={retry} />
       {issues && issues.length === 0 && <div className="empty"><strong>Metron kennt in dieser Serie noch keine Hefte.</strong></div>}
       {issues && issues.length > 0 && blocks.length === 0 && (
         <div className="empty"><strong>{filter === "read" ? "Aus dieser Serie hast du noch nichts gelesen." : filter === "pile" ? "Aus dieser Serie liegt nichts auf dem Stapel." : "Dir fehlt kein Heft dieser Serie."}</strong></div>

@@ -9,6 +9,9 @@ import { HandIcon } from "./HandIcon";
 import { Cover } from "./Cover";
 import { FormatChips } from "./FormatChips";
 import { useRun } from "./useRun";
+import { ErrorNote } from "./ErrorNote";
+import { report } from "../lib/errors";
+import { useUndo } from "../lib/undo";
 import { RIP_MS, ripCover } from "../lib/rip";
 import { flyToPile, pressStamp, thud } from "../lib/motion";
 import { useInfiniteHref } from "../lib/infiniteLink";
@@ -57,7 +60,8 @@ function useDesk() {
 
 function IssueDetailBody({ issueId, onClose }: Props) {
   const { data, today, plan, list, moveTo, release } = useStore();
-  const { run, busy, error } = useRun();
+  const { run, retry, busy, error } = useRun();
+  const { snapshot, offerRead } = useUndo();
   const [picked, setPickFormat] = useState<Format | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const desk = useDesk();
@@ -96,7 +100,11 @@ function IssueDetailBody({ issueId, onClose }: Props) {
     // Tear the cover off, then tape it back on marked as read.
     const cv = cover();
     const rip = cv ? ripCover(cv) : null;
-    await run(() => Promise.all([actions.markRead(issueId, today), new Promise((done) => window.setTimeout(done, RIP_MS))]));
+    const before = snapshot(issueId);
+    await run(async () => {
+      await Promise.all([actions.markRead(issueId, today), new Promise((done) => window.setTimeout(done, RIP_MS))]);
+      if (before) offerRead(before);
+    });
     rip?.restore();
   };
   const readEarlier = () => run(() => actions.markReadEarlier(issueId));
@@ -212,7 +220,7 @@ function IssueDetailBody({ issueId, onClose }: Props) {
         </div>
       )}
 
-      {error && <p role="alert" className="stk" style={{ whiteSpace: "normal" }}>{error}</p>}
+      <ErrorNote error={error} onRetry={retry} busy={busy} />
 
       {ui?.status === "read" ? (
         <div role="radiogroup" aria-label="Bewertung von 1 bis 10" className="toner rate">
@@ -363,7 +371,7 @@ function EventPick({ issue }: { issue: Issue }) {
  */
 function RangeAction({ issue, mode, format }: { issue: Issue; mode: "read" | "pile"; format?: Format }) {
   const { data } = useStore();
-  const { run, busy, error } = useRun();
+  const { run, retry, busy, error } = useRun();
   const [open, setOpen] = useState(false);
   const [todo, setTodo] = useState<{ ids: number[]; end: string } | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -390,7 +398,7 @@ function RangeAction({ issue, mode, format }: { issue: Issue; mode: "read" | "pi
       const end = mode === "read" ? rows[0]?.number : rows[rows.length - 1]?.number;
       setTodo({ ids, end: end ?? issue.number });
     } catch (e) {
-      setFailed((e as { message?: string })?.message ?? String(e));
+      setFailed(report(e));
     }
   }
 
@@ -403,7 +411,7 @@ function RangeAction({ issue, mode, format }: { issue: Issue; mode: "read" | "pi
   const span = todo ? (mode === "read" ? `#${todo.end} bis #${issue.number}` : `#${issue.number} bis #${todo.end}`) : "";
   return (
     <div className="confirm" role="group" aria-label={label}>
-      {failed ? <p>{failed}</p> : !todo ? <p>Zähle die Hefte …</p> : todo.ids.length === 0 ? (
+      {failed ? <ErrorNote error={failed} onRetry={prepare} /> : !todo ? <p>Zähle die Hefte …</p> : todo.ids.length === 0 ? (
         <p>{mode === "read" ? `Bis #${issue.number}` : `Ab #${issue.number}`} ist schon alles gelesen oder liegt auf dem Stapel.</p>
       ) : mode === "read" ? (
         <p>Trägt {span} als gelesen ein, {todo.ids.length === 1 ? "das ist" : "das sind"} {count} ohne Lesedatum. Hefte auf dem Stapel bleiben, wo sie sind.</p>
@@ -422,7 +430,7 @@ function RangeAction({ issue, mode, format }: { issue: Issue; mode: "read" | "pi
         )}
         <button type="button" className="btn ghost" disabled={busy} onClick={() => setOpen(false)}>{todo && todo.ids.length > 0 ? "Abbrechen" : "Schließen"}</button>
       </div>
-      {error && <p role="alert" className="stk" style={{ whiteSpace: "normal" }}>{error}</p>}
+      <ErrorNote error={error} onRetry={retry} busy={busy} />
     </div>
   );
 }

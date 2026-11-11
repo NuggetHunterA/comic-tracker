@@ -10,6 +10,7 @@ import { AllIssues } from "./AllIssues";
 import { BackButton } from "./Detail";
 import { SeriesSearch, type FoundSeries } from "./SeriesSearch";
 import { useRun } from "./useRun";
+import { ErrorNote } from "./ErrorNote";
 
 type Tick = "r" | "h" | "o" | "w";
 
@@ -40,7 +41,7 @@ export function Ticks({ view, small }: { view: EventView; small?: boolean }) {
 /** One event: its reading order, kept by hand, plus name, Kürzel and colour. */
 export function EventDetail({ eventId, onGone }: { eventId: number; onGone: () => void }) {
   const { data, events, items, plan, today } = useStore();
-  const { run, busy, error } = useRun();
+  const { run, retry, busy, error } = useRun();
   const [adding, setAdding] = useState<FoundSeries | "search" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const view = events.find((v) => v.event.id === eventId);
@@ -75,7 +76,7 @@ export function EventDetail({ eventId, onGone }: { eventId: number; onGone: () =
           <>
             <BackButton onClick={() => setAdding(null)}>Zurück zu {event.name}</BackButton>
             <p className="mut" style={{ margin: 0, fontSize: 15 }}>Tipp Hefte an, um sie ins Event zu nehmen oder wieder herauszunehmen. Fehlende Hefte kommen dabei auf den Stapel.</p>
-            {error && <p role="alert" className="stk" style={{ whiteSpace: "normal" }}>{error}</p>}
+            <ErrorNote error={error} onRetry={retry} busy={busy} />
           </>
         } />
     );
@@ -166,7 +167,7 @@ export function EventDetail({ eventId, onGone }: { eventId: number; onGone: () =
           <button type="button" className="btn" style={{ alignSelf: "flex-start" }} onClick={() => setConfirmDelete(true)}>Event löschen</button>
         )}
       </div>
-      {error && <p role="alert" className="stk" style={{ whiteSpace: "normal" }}>{error}</p>}
+      <ErrorNote error={error} onRetry={retry} busy={busy} />
     </>
   );
 }
@@ -284,7 +285,7 @@ function Order({ view, onCommit, onRemove, state, busy }: {
 /** A new event: just the name; colour and Kürzel come preset and can be changed after. */
 export function NewEvent({ onMade }: { onMade: (eventId: number) => void }) {
   const { events } = useStore();
-  const { run, busy, error } = useRun();
+  const { run, retry, busy, error } = useRun();
   const [name, setName] = useState("");
   return (
     <form style={{ display: "flex", flexDirection: "column", gap: 8 }} onSubmit={(e) => {
@@ -300,7 +301,7 @@ export function NewEvent({ onMade }: { onMade: (eventId: number) => void }) {
         <input id="new-event" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Neues Event, z. B. DC K.O." autoComplete="off" style={{ width: "auto", flex: 1 }} />
         <button type="submit" className="btn solid" disabled={busy || !name.trim()}>Anlegen</button>
       </div>
-      {error && <p role="alert" className="stk" style={{ whiteSpace: "normal", margin: 0 }}>{error}</p>}
+      <ErrorNote error={error} onRetry={retry} busy={busy} />
     </form>
   );
 }

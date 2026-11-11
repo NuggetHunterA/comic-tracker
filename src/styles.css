@@ -3,7 +3,8 @@
   --paper: #e9e8e2;
   --paper-hi: #f6f5f0;
   --ink: #111111;
-  --grey: #8d8c86;
+  /* Non-text grey (borders, dots, bars): 3:1 on paper. Text never uses it; text in grey is --muted (6:1). */
+  --grey: #7a7973;
   --muted: #55554f;
   --rule: #b9b8b2;
   --pink: #ff2e88;
@@ -33,6 +34,7 @@ a:hover { color: var(--pink); }
 h1, h2, h3 { font-family: var(--display); font-weight: 400; text-transform: uppercase; margin: 0; line-height: 0.95; }
 .d { font-family: var(--mono); }
 .mut { color: var(--muted); }
+::placeholder { color: var(--muted); opacity: 1; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* ---------- Covers ---------- */
@@ -215,12 +217,12 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-weight: 700;
 }
 .cell { position: relative; isolation: isolate; padding: 0; border: none; background: none; cursor: pointer; scroll-margin: 160px 0 24px; }
 .cell .tape { width: 30px; height: 12px; top: -6px; margin-left: -15px; transform: rotate(-4deg); }
-/* Missing: a washed-out copy, only the number stays clear. */
-.cell.none .cv { background-color: var(--paper-hi) !important; border-color: var(--grey); filter: grayscale(1) contrast(0.85); opacity: 0.5; }
+/* Missing: a washed-out copy, only the number stays clear (the wash sits under it, so it keeps full contrast). */
+.cell.none .cv { background-color: var(--paper-hi) !important; border-color: var(--grey); filter: grayscale(1) contrast(0.85); box-shadow: inset 0 0 0 999px rgba(246, 245, 240, 0.55); }
 .cell.none .cv::after { content: ""; background-image: radial-gradient(var(--grey) 1px, transparent 1.5px); background-size: 4px 4px; }
 .cell.none .num { background: var(--muted); }
 .cell.sel { outline: 3px solid var(--pink); outline-offset: 3px; }
-.cell.sel.none .cv { opacity: 0.85; }
+.cell.sel.none .cv { box-shadow: inset 0 0 0 999px rgba(246, 245, 240, 0.15); }
 .stamp {
   position: absolute; left: 50%; top: 38%; z-index: 2; transform: translate(-50%, -50%) rotate(-12deg);
   border: 2px solid var(--ink); background: var(--paper); font-family: var(--display); font-size: 11px; line-height: 1;
@@ -619,7 +621,7 @@ button.mrow:hover > span { text-decoration: underline; text-decoration-color: va
 .bz-day { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .bz-day .d { font-size: 12px; font-weight: 700; padding: 2px 0; }
 .bz-day .stk { font-size: 12px; transform: rotate(-2deg); }
-.bz-day.later .d { color: var(--grey); }
+.bz-day.later .d { color: var(--muted); font-weight: 400; }
 .bz-ticks { display: flex; flex-direction: column-reverse; align-items: center; gap: 3px; width: 100%; }
 .bz-ticks i { display: block; width: min(100%, 28px); height: 12px; background: var(--ink); }
 .bz-day.later .bz-ticks { background: repeating-linear-gradient(0deg, transparent 0 14px, var(--rule) 14px 15px); width: min(100%, 28px); }
@@ -676,3 +678,46 @@ button.mrow:hover > span { text-decoration: underline; text-decoration-color: va
 .statbtn { color: var(--muted); margin: -2px -10px 0 0; }
 .statbtn:hover { color: var(--ink); }
 .statbtn.on { color: var(--ink); background: var(--pink); box-shadow: -3px -2px 0 var(--ink); margin-right: 0; }
+
+/* ---------- Errors: what went wrong, and Nochmal ---------- */
+.oops {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0;
+  background: var(--pink); color: var(--ink); padding: 8px 8px 8px 12px; font-size: 15px; font-weight: 700; line-height: 1.35;
+}
+.oops > span { flex: 1 1 18ch; }
+.oops .btn { min-height: 40px; flex: none; }
+
+/* ---------- Undo after "Gelesen": a toner strip over the bar ---------- */
+.undo {
+  position: fixed; z-index: 33; left: 12px; right: 12px; bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 12px);
+  display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 6px 6px 6px 14px;
+  background: var(--ink); color: var(--paper); box-shadow: 0 6px 18px rgba(17, 17, 17, 0.28);
+}
+.undo-text { flex: 1; min-width: 0; margin: 0; font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; }
+.undo-go {
+  flex: none; min-height: 44px; padding: 0 14px; border: 2px solid var(--pink); background: transparent; color: var(--pink);
+  font-family: var(--display); font-size: 18px; text-transform: uppercase; cursor: pointer;
+}
+.undo-go:hover { background: var(--pink); color: var(--ink); }
+.undo-go:disabled { cursor: default; }
+.undo-x { flex: none; width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border: none; background: none; color: var(--paper); cursor: pointer; }
+.undo.failed { background: var(--pink); color: var(--ink); }
+.undo.failed .undo-text { font-weight: 700; }
+.undo.failed .undo-go { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.undo.failed .undo-x { color: var(--ink); }
+/* The time left, as a pink line running out under the strip. Stops while the strip is touched or focused. */
+.undo-time { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--pink); transform-origin: 0 50%; animation: undo-run linear forwards; }
+.undo:hover .undo-time, .undo:focus-within .undo-time, .undo:has(:disabled) .undo-time { animation-play-state: paused; }
+@keyframes undo-run { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: no-preference) {
+  .undo { animation: undo-in 220ms cubic-bezier(0.16, 1, 0.3, 1); }
+  @keyframes undo-in { from { transform: translateY(16px); opacity: 0; } }
+}
+@media (min-width: 1000px), (min-width: 700px) and (orientation: landscape) {
+  /* Inside the list pane, clear of the detail's toner bar. */
+  .undo { left: calc(var(--rail-w) + 16px); right: auto; bottom: 16px; width: 348px; }
+}
+
+/* Paused series and finished events step back by their covers; their text keeps full contrast. */
+.sr.paused .cv { opacity: 0.5; }
+.evdone .strip, .evdone .ticks { opacity: 0.55; }

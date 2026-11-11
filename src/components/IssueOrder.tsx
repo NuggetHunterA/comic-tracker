@@ -5,6 +5,7 @@ import { issueTitle } from "../lib/labels";
 import { Cover } from "./Cover";
 import { HandIcon } from "./HandIcon";
 import { useRun } from "./useRun";
+import { ErrorNote } from "./ErrorNote";
 
 const GRIP = (
   <svg width="12" height="20" viewBox="0 0 12 20" fill="currentColor" aria-hidden="true">
@@ -19,7 +20,7 @@ const GRIP = (
  */
 export function IssueOrder() {
   const { data, items, plan, list, today, resort, moveTo, release } = useStore();
-  const { run, busy, error } = useRun();
+  const { run, retry, busy, error } = useRun();
 
   const saved = list.map((e) => e.issueId);
   const key = saved.join(",");
@@ -137,7 +138,7 @@ export function IssueOrder() {
           })}
         </ol>
       )}
-      {error && <p role="alert" className="stk" style={{ whiteSpace: "normal" }}>{error}</p>}
+      <ErrorNote error={error} onRetry={retry} busy={busy} />
     </>
   );
 }

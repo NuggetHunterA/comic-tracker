@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { metron } from "../lib/supabase";
+import { report } from "../lib/errors";
+import { ErrorNote } from "./ErrorNote";
 
 export interface FoundSeries {
   id: number;
@@ -24,8 +26,8 @@ export function SeriesSearch({ onPick, picked, followed, onActive }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function search(e: React.FormEvent) {
-    e.preventDefault();
+  async function search(e?: React.FormEvent) {
+    e?.preventDefault();
     if (!q.trim()) return;
     setBusy(true);
     setError(null);
@@ -34,7 +36,7 @@ export function SeriesSearch({ onPick, picked, followed, onActive }: {
       setResults(r.results);
       onActive?.(true);
     } catch (err) {
-      setError((err as { message?: string })?.message ?? "Suche fehlgeschlagen");
+      setError(report(err));
     } finally {
       setBusy(false);
     }
@@ -50,7 +52,7 @@ export function SeriesSearch({ onPick, picked, followed, onActive }: {
         }} placeholder="z. B. Nightwing" autoComplete="off" />
         <button type="submit" className="btn solid" disabled={busy}>{busy ? "Suche …" : "Suchen"}</button>
       </form>
-      {error && <p role="alert" className="stk" style={{ whiteSpace: "normal", margin: 0 }}>{error}</p>}
+      <ErrorNote error={error} onRetry={() => void search()} busy={busy} />
       {results && results.length === 0 && <p className="mut" style={{ margin: 0 }}>Nichts gefunden. Versuch es mit dem Seriennamen ohne Jahr.</p>}
       {results && results.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column" }}>

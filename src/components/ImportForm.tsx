@@ -5,6 +5,8 @@ import type { Format } from "../lib/types";
 import { FormatChips } from "./FormatChips";
 import { isSub, subFormatOf } from "../lib/publisher";
 import { SeriesSearch, type FoundSeries } from "./SeriesSearch";
+import { ErrorNote } from "./ErrorNote";
+import { report } from "../lib/errors";
 
 /** Old pile: pick a series and a number range; all of it counts as owned. */
 export function ImportForm({ onDone }: { onDone: () => void }) {
@@ -17,9 +19,11 @@ export function ImportForm({ onDone }: { onDone: () => void }) {
   const fmt: Format = subFormatOf(series) && format !== "print" ? subFormatOf(series)! : "print";
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  async function submit(e?: React.FormEvent) {
+    e?.preventDefault();
+    setFailed(null);
     if (!series) return;
     const a = Number(from);
     const b = Number(to || from);
@@ -51,7 +55,8 @@ export function ImportForm({ onDone }: { onDone: () => void }) {
       setFrom("");
       setTo("");
     } catch (err) {
-      setMsg((err as { message?: string })?.message ?? "Das hat nicht geklappt.");
+      setMsg(null);
+      setFailed(report(err));
     } finally {
       setBusy(false);
     }
@@ -77,6 +82,7 @@ export function ImportForm({ onDone }: { onDone: () => void }) {
         </form>
       )}
       {msg && <p role="status" style={{ margin: 0, fontSize: 15 }}>{msg}</p>}
+      <ErrorNote error={failed} onRetry={() => void submit()} busy={busy} />
     </div>
   );
 }

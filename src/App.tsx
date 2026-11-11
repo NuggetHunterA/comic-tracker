@@ -19,6 +19,10 @@ import { EventDetail } from "./components/EventDetail";
 import { SeriesOrder } from "./components/SeriesOrder";
 import { IssueOrder } from "./components/IssueOrder";
 import { onOpenEvent, onOpenRun } from "./lib/nav";
+import { ErrorNote } from "./components/ErrorNote";
+import { explain } from "./lib/errors";
+import { UndoProvider } from "./lib/undo";
+import { UndoStrip } from "./components/UndoStrip";
 
 // Two panes only when there is room for both: wide screens, or a Fold opened in landscape.
 // Held upright (3:4) the inner screen is too narrow for a second pane and gets the one-column layout.
@@ -69,7 +73,9 @@ export function App() {
   if (!session) return <Login />;
   return (
     <StoreProvider>
-      <Shell />
+      <UndoProvider>
+        <Shell />
+      </UndoProvider>
     </StoreProvider>
   );
 }
@@ -77,7 +83,12 @@ export function App() {
 function Shell() {
   const wide = useWide();
   const tab = useTab();
-  const { data, error, plan, today, items } = useStore();
+  const { data, error, plan, today, items, reload } = useStore();
+  const [retrying, setRetrying] = useState(false);
+  const retry = useCallback(() => {
+    setRetrying(true);
+    void reload().finally(() => setRetrying(false));
+  }, [reload]);
 
   const [planSel, setPlanSel] = useState<number | null>(null);
   const [stapelSel, setStapelSel] = useState<StapelSel>(null);
@@ -179,11 +190,12 @@ function Shell() {
       <Nav tab={tab} counters={counters} />
       <div className="panes">
         <main className={`pane list ${wideList ? "wide" : ""}`}>
-          {error && <p role="alert" className="stk" style={{ whiteSpace: "normal" }}>Fehler beim Laden: {error}</p>}
+          <ErrorNote error={error && explain(error)} onRetry={retry} busy={retrying} />
           {!data && !error ? <p className="d mut">LÄDT …</p> : list}
         </main>
         {data && detail}
       </div>
+      {data && <UndoStrip />}
       {data && <InfiniteDrop />}
     </div>
   );

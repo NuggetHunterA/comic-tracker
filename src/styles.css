@@ -720,7 +720,6 @@ button.mrow:hover > span { text-decoration: underline; text-decoration-color: va
 
 /* Paused series and finished events step back by their covers; their text keeps full contrast. */
 .sr.paused .cv { opacity: 0.5; }
-.evdone .strip, .evdone .ticks { opacity: 0.55; }
 
 /* ---------- Offline: black strip over the panes, light for a moment when the network is back ---------- */
 .offline {
@@ -1000,3 +999,103 @@ button.mrow:hover > span { text-decoration: underline; text-decoration-color: va
 .jw-teaser strong { font-family: var(--display); font-size: 21px; font-weight: 400; text-transform: uppercase; line-height: 1; }
 .jw-teaser .d { font-size: 12px; color: var(--rule); }
 .jw-teaser .x { flex: none; width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border: none; background: none; color: var(--paper); cursor: pointer; }
+
+/* ---------- Lese-Erfolge: split-flap counters, Feierabend stamp, event seals ---------- */
+
+/* Rubber-stamp ink: speckled where the rubber did not take the toner. */
+:root {
+  --ink-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -2.4 0 0 0 2.35'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Split-flap: each character is a card; the halves carry the ground they sit on. */
+.flapwrap { display: inline-block; }
+.flap { display: inline-flex; white-space: pre; font-variant-numeric: tabular-nums; }
+.fc { position: relative; display: inline-block; }
+.fc .sz { visibility: hidden; }
+.fc .h { position: absolute; left: -1px; right: -1px; overflow: hidden; background: var(--flap-bg, var(--paper)); }
+.fc .h > span { display: block; text-align: center; }
+.fc .top { top: 0; height: 50%; }
+.fc .bot { bottom: 0; height: 50%; }
+.fc .bot > span { transform: translateY(-50%); }
+.fc .top.leaf { transform-origin: 50% 100%; z-index: 2; box-shadow: inset 0 -1px 0 rgba(127, 127, 127, 0.55); }
+.fc .bot.leaf { transform-origin: 50% 0; z-index: 2; box-shadow: inset 0 1px 0 rgba(127, 127, 127, 0.55); }
+.nav .c { --flap-bg: var(--ink); }
+
+/* Feierabend: the stamp on the empty wall, the evening's tally under it. */
+.feierabend { position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 18px 0 8px; }
+.fa-wrap { position: relative; display: flex; justify-content: center; }
+.fa-stamp {
+  position: relative; transform: rotate(-6deg); padding: 10px 16px 8px; border: 5px solid var(--ink); color: var(--ink);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  -webkit-mask-image: var(--ink-mask); mask-image: var(--ink-mask); -webkit-mask-size: 180px; mask-size: 180px;
+}
+.fa-stamp::before { content: ""; position: absolute; inset: 4px; border: 1.5px solid var(--ink); pointer-events: none; }
+.fa-stamp.echo { position: absolute; left: 0; top: 0; pointer-events: none; }
+.fa-stamp .w { font-family: var(--display); font-size: clamp(40px, 13vw, 50px); line-height: 0.9; text-transform: uppercase; letter-spacing: 0.01em; }
+.fa-stamp .dt { font-family: var(--mono); font-weight: 700; font-size: 13px; letter-spacing: 0.14em; }
+.fa-receipt { font-weight: 700; font-size: 14px; letter-spacing: 0.02em; text-align: center; }
+
+/* Event seal: a round label in the event's colour. The ink speckle sits on the face only, so a "+1" stays clean. */
+.evseal { --c: #ffd23f; position: relative; display: inline-block; width: 96px; height: 96px; flex: none; transform: rotate(9deg); }
+.evseal .face {
+  position: absolute; inset: 0; border-radius: 50%; background: var(--c); border: 3px solid var(--ink); color: var(--ink);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  -webkit-mask-image: var(--ink-mask); mask-image: var(--ink-mask); -webkit-mask-size: 140px; mask-size: 140px;
+}
+.evseal .face::before { content: ""; position: absolute; inset: 5px; border-radius: 50%; border: 2px dashed var(--ink); }
+.evseal .k { font-family: var(--display); font-size: calc(30px * var(--ks, 1)); line-height: 0.9; text-transform: uppercase; white-space: nowrap; }
+.evseal .p { font-family: var(--mono); font-weight: 700; font-size: 12px; letter-spacing: 0.08em; }
+.evseal.md { width: 64px; height: 64px; }
+.evseal.md .face { -webkit-mask-size: 100px; mask-size: 100px; }
+.evseal.md .k { font-size: calc(19px * var(--ks, 1)); }
+.evseal.md .p { font-size: 10px; letter-spacing: 0.02em; }
+.evseal.sm { width: 44px; height: 44px; }
+.evseal.sm .face { border-width: 2px; -webkit-mask-size: 80px; mask-size: 80px; }
+.evseal.sm .face::before { inset: 3px; border-width: 1.5px; }
+.evseal.sm .k { font-size: calc(14px * var(--ks, 1)); }
+.evseal.sm .p { font-size: 8px; letter-spacing: 0; }
+.evseal .plus {
+  position: absolute; top: -6px; right: -12px; z-index: 2; background: var(--pink); color: var(--ink);
+  font-family: var(--mono); font-weight: 700; font-size: 12px; padding: 1px 5px; transform: rotate(-1deg);
+}
+
+/* Tonight's seals hang beside the headline until midnight. */
+.tonight-head { position: relative; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.wall-seals { display: flex; margin-top: -4px; }
+.wall-seals .evseal + .evseal { margin-left: -28px; transform: rotate(-7deg); }
+
+/* Meine Serien: the finished events as a row of seals. */
+.ev-h { font-size: 22px; border-bottom: 3px solid var(--ink); padding-bottom: 4px; margin-top: 10px; }
+.shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 12px 8px; padding-top: 14px; }
+.shelf button {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 2px; border: 2px solid transparent;
+  background: none; cursor: pointer; text-align: center;
+}
+.shelf button.on { border-color: var(--ink); background: var(--paper-hi); }
+.shelf button:nth-child(2n) .evseal { transform: rotate(-7deg); }
+.shelf button:nth-child(3n) .evseal { transform: rotate(3deg); }
+.shelf .n { font-size: 14px; font-weight: 700; line-height: 1.15; }
+.shelf .d { font-size: 11px; }
+
+/* The event finale: the covers gather, the band runs over them, the seal is pressed on. */
+.gather {
+  position: fixed; inset: 0; z-index: 60; background: rgba(233, 232, 226, 0.94); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+.gx-row { position: relative; display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 8px; padding-top: 14px; max-width: 380px; }
+.gx-c { display: block; width: 58px; }
+.gx-c .cv { width: 100%; }
+.gx-c .tape { width: 30px; height: 12px; margin-left: -15px; top: -6px; transform: rotate(var(--tr, 3deg)); }
+.gx-more {
+  aspect-ratio: 2 / 3; border: 2px dashed var(--ink); display: flex; align-items: center; justify-content: center;
+  font-family: var(--display); font-size: 20px;
+}
+.gx-band {
+  position: absolute; left: 50%; translate: -50% 0; width: max-content; min-width: calc(100% + 12px); max-width: calc(100vw - 24px); top: 50%; height: 30px; margin-top: -8px; z-index: 4;
+  display: flex; align-items: center; justify-content: center; padding: 0 12px; color: var(--ink);
+  font-family: var(--mono); font-weight: 700; font-size: 13px; letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; transform: rotate(-2deg);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 6px) 25%, 100% 50%, calc(100% - 7px) 75%, 100% 100%, 0 100%, 6px 75%, 0 50%, 7px 25%);
+}
+.gx-seal { position: absolute; left: 50%; top: 50%; margin: -48px 0 0 -48px; }
+.gx-skip { position: absolute; bottom: calc(24px + env(safe-area-inset-bottom)); font-size: 12px; color: var(--muted); }

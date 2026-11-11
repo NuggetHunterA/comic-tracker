@@ -16,6 +16,12 @@ import { archiveKinds, blindEnvelope, boxEnvelopes, nextDays, restOf, seasonEnve
 import { ArchiveFlyer, BlindEnvelope, RestOfRun, SeasonFlyer } from "../components/ArchiveBox";
 
 import { YearTeaser } from "./YearTeaser";
+import { Flap } from "../components/Flap";
+import { Feierabend } from "../components/Feierabend";
+import { Seal, doneOn } from "../components/EventFinale";
+import { eventDone } from "../lib/store";
+import { readingStats } from "../lib/stats";
+import { readJustNow } from "../lib/moments";
 
 const wait = (ms: number) => new Promise((done) => window.setTimeout(done, ms));
 
@@ -33,7 +39,14 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
       .filter((i) => i.ui.status === "pile" && isSub(i.ui.format) && i.readableFrom && i.readableFrom > today)
       .sort((a, b) => a.readableFrom!.localeCompare(b.readableFrom!))[0];
     const pileCount = items.filter((i) => i.ui.status === "pile" && i.readable).length;
-    const readToday = items.filter((i) => i.ui.status === "read" && i.ui.read_on === today).length;
+    const readTonight = items.filter((i) => i.ui.status === "read" && i.ui.read_on === today);
+    const readToday = readTonight.length;
+    const grades = readTonight.flatMap((i) => (i.ui.rating === null ? [] : [i.ui.rating]));
+    const streak = readToday
+      ? readingStats(items.filter((i) => i.ui.status === "read").map((i) => ({ issueId: i.issue.id, seriesId: i.issue.series_id, readOn: i.ui.read_on, rating: i.ui.rating })), today).streak
+      : 0;
+    // Events read to the end tonight keep their seal on the wall until midnight.
+    const sealed = events.filter((v) => eventDone(v) && doneOn(v, (id) => data.userIssues.get(id)?.read_on) === today);
     const byId = new Map(items.map((i) => [i.issue.id, i]));
     const waiting = stalled.flatMap(({ issueId, behind }) => {
       const it = byId.get(issueId);
@@ -58,14 +71,14 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
     const rest = tonight.map(({ issue }) => restOf(archive, issue.id)).find(Boolean) ?? null;
     const fromArchive = archiveKinds(archive);
     const archiveIds = new Set(items.filter((i) => i.ui.archive).map((i) => i.issue.id));
-    return { tonight, next: week, soon, pileCount, readToday, waiting, paused, blind, box, free, season, rest, fromArchive, archiveIds };
+    return { tonight, next: week, soon, pileCount, readToday, grades, streak, sealed, waiting, paused, blind, box, free, season, rest, fromArchive, archiveIds };
   }, [data, plan, stalled, today, items, events]);
 
   const wall = useRef<HTMLElement>(null);
   useSlideOver(wall);
 
   if (!view) return null;
-  const { tonight, next, soon, pileCount, readToday, waiting, paused, blind, box, free, season, rest, fromArchive, archiveIds } = view;
+  const { tonight, next, soon, pileCount, readToday, grades, streak, sealed, waiting, paused, blind, box, free, season, rest, fromArchive, archiveIds } = view;
   const marks = tonight.map(({ issue }) => eventOf.get(issue.id));
   const banded = marks.some(Boolean);
 
@@ -86,12 +99,19 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span className="stk" style={{ transform: "rotate(-1deg)", fontSize: 14, padding: "3px 8px" }}>{dayLabel(today)}</span>
         <span className="d tally">
-          <span>STAPEL: {pileCount}</span>
-          {readToday > 0 && <span>HEUTE GELESEN: <span key={readToday} className="bump">{readToday}</span></span>}
+          <span>STAPEL: <Flap value={String(pileCount)} /></span>
+          {readToday > 0 && <span>HEUTE GELESEN: <Flap value={String(readToday)} from={readToday === 1 && readJustNow() ? "0" : undefined} /></span>}
         </span>
       </div>
       <YearTeaser />
-      <h1 style={{ fontSize: "clamp(48px, 15vw, 60px)", lineHeight: 0.92 }}>Heute<br />Abend</h1>
+      <div className="tonight-head">
+        <h1 style={{ fontSize: "clamp(48px, 15vw, 60px)", lineHeight: 0.92 }}>Heute<br />Abend</h1>
+        {sealed.length > 0 && (
+          <span className="wall-seals">
+            {sealed.slice(0, 2).map((v) => <Seal key={v.event.id} event={v.event} total={v.order.length} />)}
+          </span>
+        )}
+      </div>
       {tonight.length > 0 ? (
         <>
           <span style={{ fontSize: 16 }}>Am Stück: <strong>{runsLabel(tonight)}</strong></span>
@@ -115,21 +135,17 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
           <span style={{ fontSize: 16 }}>Heute ist nichts lesbar. Dafür ist Post aus dem Archiv da.</span>
           <BlindEnvelope envelope={blind} />
         </>
+      ) : readToday > 0 ? (
+        <Feierabend today={today} count={readToday} grades={grades} streak={streak}
+          next={next[0]?.list[0] ? { label: issueTitle(next[0].list[0].issue, next[0].list[0].series), onClick: () => onSelect(next[0].list[0].issue.id) } : null} />
       ) : (
         <div className="empty">
-          <strong style={{ fontSize: 17 }}>{readToday > 0 ? "Für heute geschafft." : "Heute ist nichts lesbar."}</strong>
+          <strong style={{ fontSize: 17 }}>Heute ist nichts lesbar.</strong>
           <span className="mut">
-            {readToday > 0
-              ? next.length > 0 ? `Morgen geht es mit ${runsLabel(next[0].list)} weiter.` : "Mehr ist gerade nicht lesbar."
-              : items.length === 0
+            {items.length === 0
               ? "Trag deinen Altbestand im Stapel ein oder folge Serien, dann füllt sich der Plan von selbst."
               : "Alles gelesen oder noch nicht verfügbar. Neue Hefte rutschen automatisch nach."}
           </span>
-          {readToday > 0 && next[0]?.list[0] && (
-            <button type="button" className="btn" onClick={() => onSelect(next[0].list[0].issue.id)}>
-              Noch eins: {issueTitle(next[0].list[0].issue, next[0].list[0].series)}
-            </button>
-          )}
           {items.length === 0 && <a className="btn solid" href="#stapel" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }}>Altbestand eintragen</a>}
         </div>
       )}

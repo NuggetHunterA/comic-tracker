@@ -182,7 +182,7 @@ async function syncWriter(issueId: number): Promise<string | null> {
 
 // A few pile issues per run, so most details already know their writer.
 async function syncPileWriters(log: string[]) {
-  const { data: open } = await db.from("user_issues").select("issue_id").in("status", ["pile", "expected"]);
+  const { data: open } = await db.from("user_issues").select("issue_id").eq("status", "pile");
   const ids = [...new Set((open ?? []).map((u) => u.issue_id))];
   if (!ids.length) return;
   const todo: number[] = [];
@@ -255,9 +255,7 @@ Deno.serve(async (req) => {
       return json({ message: await cron() });
     }
 
-    const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-    const { data: user } = await db.auth.getUser(token);
-    if (!user?.user) return json({ error: "unauthorized" }, 401);
+    // No sign-in in this single-user app: the app calls with the publishable key only.
     deadline = Date.now() + RUN_BUDGET_MS;
 
     if (body.action === "search-series") return json({ results: await searchSeries(String(body.q ?? "")) });

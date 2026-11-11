@@ -5,3 +5,4 @@ dist
 .impeccable/live
 test-results
 playwright-report
+*.tsbuildinfo

@@ -64,7 +64,7 @@ export function useListSync(
       return ui?.status === "read" && (ui.read_on ?? "0000") > m ? ui.read_on ?? "0000" : m;
     }, "");
     const startedEvents = events.filter((v) => v.read > 0).sort((a, b) => lastRead(b).localeCompare(lastRead(a))).map((v) => v.event.id);
-    const open = items.filter((i) => (i.ui.status === "pile" || i.ui.status === "expected") && !i.ui.skip_plan);
+    const open = items.filter((i) => i.ui.status === "pile" && !i.ui.skip_plan);
     const planIssues: PlanIssue[] = open.map((i) => ({
       id: i.issue.id,
       seriesId: i.issue.series_id,

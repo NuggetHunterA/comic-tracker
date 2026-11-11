@@ -28,7 +28,7 @@ export function SeriesOrder() {
     const oldPile = new Set<number>();
     const firstDate = new Map<number, string>();
     for (const i of items) {
-      if ((i.ui.status !== "pile" && i.ui.status !== "expected") || i.ui.skip_plan) continue;
+      if (i.ui.status !== "pile" || i.ui.skip_plan) continue;
       const sid = i.issue.series_id;
       open.set(sid, (open.get(sid) ?? 0) + 1);
       if (i.ui.old_pile) oldPile.add(sid);

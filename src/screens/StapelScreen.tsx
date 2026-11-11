@@ -14,7 +14,7 @@ export type { StapelSel } from "../lib/route";
 import type { StapelSel } from "../lib/route";
 type Filter = "alle" | "print" | "infinite" | "webtoon" | "gelesen";
 
-const isOpen = (i: Item) => i.ui.status === "pile" || i.ui.status === "expected";
+const isOpen = (i: Item) => i.ui.status === "pile";
 
 export function useStapel(filter: Filter) {
   const { items, plan } = useStore();

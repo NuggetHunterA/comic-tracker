@@ -43,7 +43,7 @@ export function InfiniteDrop() {
     return items
       .filter((i) => {
         // On the pile in a subscription, or wished for from a publisher that has one.
-        const f = i.ui.status === "pile" || i.ui.status === "expected" ? i.ui.format : i.ui.status === "wishlist" ? subFormatOf(i.series) : null;
+        const f = i.ui.status === "pile" ? i.ui.format : i.ui.status === "wishlist" ? subFormatOf(i.series) : null;
         return !!i.issue.store_date && isSub(f) && addDays(i.issue.store_date, delays[f]) === today;
       })
       .sort((a, b) => Number(a.ui.status === "wishlist") - Number(b.ui.status === "wishlist") || issueTitle(a.issue, a.series).localeCompare(issueTitle(b.issue, b.series)));

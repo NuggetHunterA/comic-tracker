@@ -11,10 +11,7 @@ export async function check<T extends { error: unknown }>(p: PromiseLike<T>): Pr
 
 export const actions = {
   markRead: (issueId: number, today: string) =>
-    Promise.all([
-      check(supabase.from("user_issues").update({ status: "read", read_on: today, updated_at: new Date().toISOString() }).eq("issue_id", issueId)),
-      check(supabase.from("plan_entries").delete().eq("issue_id", issueId)),
-    ]),
+    check(supabase.from("user_issues").update({ status: "read", read_on: today, updated_at: new Date().toISOString() }).eq("issue_id", issueId)),
   markUnread: (issueId: number) =>
     check(supabase.from("user_issues").update({ status: "pile", read_on: null, rating: null }).eq("issue_id", issueId)),
   /** Read before the app knew about it: no reading date, never on the pile. */
@@ -37,10 +34,7 @@ export const actions = {
   rate: (issueId: number, rating: number | null) =>
     check(supabase.from("user_issues").update({ rating }).eq("issue_id", issueId)),
   skipPlan: (issueId: number, skip: boolean) =>
-    Promise.all([
-      check(supabase.from("user_issues").update({ skip_plan: skip }).eq("issue_id", issueId)),
-      check(supabase.from("plan_entries").delete().eq("issue_id", issueId)),
-    ]),
+    check(supabase.from("user_issues").update({ skip_plan: skip }).eq("issue_id", issueId)),
   setBought: (issueId: number, boughtOn: string | null) =>
     check(supabase.from("user_issues").update({ bought_on: boughtOn }).eq("issue_id", issueId)),
   setFormat: (issueId: number, format: Format) =>
@@ -48,10 +42,7 @@ export const actions = {
   addIssue: (issueId: number, status: "pile" | "wishlist", format: Format | null, extra: Partial<UserIssue> = {}) =>
     check(supabase.from("user_issues").upsert({ issue_id: issueId, status, format, ...extra }, { onConflict: "user_id,issue_id" })),
   removeIssue: (issueId: number) =>
-    Promise.all([
-      check(supabase.from("plan_entries").delete().eq("issue_id", issueId)),
-      check(supabase.from("user_issues").delete().eq("issue_id", issueId)),
-    ]),
+    check(supabase.from("user_issues").delete().eq("issue_id", issueId)),
   dismissIssue: (issueId: number) =>
     check(supabase.from("user_issues").update({ status: "dismissed" }).eq("issue_id", issueId)),
   follow: async (seriesId: number, format: Format) => {

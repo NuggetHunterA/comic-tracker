@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-Delegated and approved: Vite + React + TypeScript as an installable PWA on GitHub Pages (`/comic-tracker/`). Data in the Supabase project sport-recap, own schema `comics`. Adrian is the only user: he signs in with email and password once per device and the session stays on the device (no shared app account, no credentials in the bundle). The `metron` Edge Function syncs Metron hourly via pg_cron (followed series and the catalog for last month to two months ahead) and serves series search for the app.
+Delegated and approved: Vite + React + TypeScript as an installable PWA on GitHub Pages (`/comic-tracker/`). Data in the Supabase project sport-recap, own schema `comics`. No login: Adrian is the only user and the app opens straight into his data (Adrian's choice; no app account or credentials in the bundle). The `metron` Edge Function syncs Metron hourly via pg_cron (followed series and the catalog for last month to two months ahead) and serves series search for the app.
 
 ## Users
 

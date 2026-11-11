@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import type { Session } from "@supabase/supabase-js";
-import { supabase } from "./lib/supabase";
 import { StoreProvider, useStore } from "./lib/store";
 import { monthLabel, monthStart } from "./lib/dates";
 import { Nav, TABS, type Tab } from "./components/Nav";
@@ -10,7 +8,6 @@ import { seriesLong } from "./lib/labels";
 import { IssueDetail } from "./components/IssueDetail";
 import { InfiniteDrop } from "./components/InfiniteDrop";
 import { ImportForm } from "./components/ImportForm";
-import { Login } from "./screens/Login";
 import { PlanScreen } from "./screens/PlanScreen";
 import { StapelList, StapelSeries, type StapelSel } from "./screens/StapelScreen";
 import { KatalogList } from "./screens/KatalogScreen";
@@ -49,16 +46,8 @@ function useTab(): Tab {
   return tab;
 }
 
+// Single-user app without sign-in: the database serves the owner's rows to the publishable key.
 export function App() {
-  const [session, setSession] = useState<Session | null | undefined>(undefined);
-  useEffect(() => {
-    const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
-    // Single-user app: sign in once per device, the session then stays (persistSession).
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    return () => data.subscription.unsubscribe();
-  }, []);
-  if (session === undefined) return null;
-  if (!session) return <Login />;
   return (
     <StoreProvider>
       <Shell />

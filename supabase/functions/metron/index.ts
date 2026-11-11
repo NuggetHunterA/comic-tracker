@@ -255,9 +255,7 @@ Deno.serve(async (req) => {
       return json({ message: await cron() });
     }
 
-    const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-    const { data: user } = await db.auth.getUser(token);
-    if (!user?.user) return json({ error: "unauthorized" }, 401);
+    // No sign-in in this single-user app: the app calls with the publishable key only.
     deadline = Date.now() + RUN_BUDGET_MS;
 
     if (body.action === "search-series") return json({ results: await searchSeries(String(body.q ?? "")) });

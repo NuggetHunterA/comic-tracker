@@ -161,7 +161,8 @@ function IssueDetailBody({ issueId, onClose }: Props) {
   const moreCount = more.length + (hasRange ? 2 : 0) + (onPile && hasSub ? 1 : 0) + 1;
 
   return (
-    <div className="issue-detail">
+    // Keyed by the issue: switching to another one prints the sheet afresh under the laser.
+    <div key={issueId} className="issue-detail">
       <div ref={head} className="dhead">
         <Cover issue={issue} readable={!ui || readable || ui.status === "read"} showNumber={false} tape={ui?.status === "read" ? "GELESEN" : true} style={{ width: "var(--detail-cover, 96px)", flex: "none", transform: "rotate(-1.5deg)" }}>
           {ui?.status === "read" && ui.rating && <span key={ui.rating} className={`stamp grade ${stamped === ui.rating ? "hit" : ""}`}>{ui.rating}<b>/10</b></span>}

@@ -856,3 +856,147 @@ button.mrow:hover > span { text-decoration: underline; text-decoration-color: va
 @media (prefers-reduced-motion: reduce) {
   .found, .env-row, .env-one { transition: none; }
 }
+
+/* ---------- Jahreswand: the year's covers taped up under a photocopied flyer (screens/Jahreswand.tsx) ---------- */
+.jw { display: flex; flex-direction: column; gap: 14px; }
+.jw-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; border-bottom: 3px solid var(--ink); padding-bottom: 8px; }
+.jw-bar h1 { font-size: 34px; flex: 1; }
+.jw-bar .back { min-height: 40px; }
+.jw-years { display: flex; gap: 6px; }
+.jw-years .chip { min-height: 36px; font-family: var(--mono); }
+.jw-body { display: flex; flex-direction: column; gap: 26px; padding-top: 10px; }
+.jw-col { position: relative; display: flex; flex-direction: column; gap: 16px; }
+.jw-press { position: relative; transform: rotate(-0.8deg); }
+
+.jw-flyer { position: relative; background: var(--paper-hi); border: 1px solid var(--ink); padding: 18px 16px 0; box-shadow: 0 6px 14px -8px rgba(17, 17, 17, 0.45); }
+.jw-flyer > .tape { width: 40px; height: 15px; margin: 0; top: -8px; }
+.jw-flyer > .tape.l { left: 14px; transform: rotate(-14deg); }
+.jw-flyer > .tape.r { left: auto; right: 14px; transform: rotate(12deg); }
+.jw-yr { font-family: var(--display); font-size: 92px; line-height: 0.82; }
+.jw-span { font-size: 12px; font-weight: 700; margin-top: 6px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.jw-span .stk { font-size: 12px; padding: 1px 6px; transform: rotate(-2deg); }
+.jw-lineup { margin: 14px 0 12px; display: flex; flex-direction: column; gap: 2px; font-family: var(--display); text-transform: uppercase; line-height: 0.98; }
+.jw-lineup .a { font-size: 44px; }
+.jw-lineup .b { font-size: 30px; }
+.jw-lineup .c { font-size: 22px; }
+.jw-lineup em { font-style: normal; color: var(--pink); -webkit-text-stroke: 1px var(--ink); paint-order: stroke fill; }
+.jw-facts { border-top: 3px solid var(--ink); }
+.jw-facts .kv { justify-content: space-between; }
+.jw-facts .kv > span:first-child { width: auto; color: var(--ink); font-weight: 700; font-size: 12px; }
+.jw-facts .kv strong { text-align: right; }
+.jw-facts .g { background: var(--pink); font-family: var(--display); font-size: 16px; padding: 0 5px; margin-left: 6px; font-weight: 400; }
+.jw-pub { display: flex; flex-direction: column; gap: 4px; padding: 8px 0 2px; }
+.jw-pub > .d { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 700; }
+.jw-pubbar { display: flex; height: 10px; border: 1px solid var(--ink); }
+.jw-pubbar i { display: block; height: 100%; flex-basis: 0; }
+.jw-pubbar .dc { background: var(--dc); }
+.jw-pubbar .marvel { background: var(--marvel); }
+/* Tear-off slips along the bottom edge: one fun fact each. */
+.jw-slips { margin: 14px -16px 0; border-top: 2px dashed var(--ink); display: grid; }
+.jw-slip {
+  position: relative; height: 96px; border: none; border-right: 1px dashed var(--muted); background: none; padding: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; min-width: 0;
+}
+.jw-slip:last-child { border-right: none; }
+.jw-slip span { writing-mode: vertical-rl; transform: rotate(180deg); font-family: var(--mono); font-weight: 700; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+.jw-slip:hover:not(:disabled) { background: rgba(255, 46, 136, 0.12); }
+.jw-slip.torn { cursor: default; }
+.jw-slip.torn span { visibility: hidden; }
+.jw-slip.torn::before { content: ""; position: absolute; inset: 8px 0 0; background: var(--paper); }
+.jw-slip.torn::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 9px; background: var(--paper-hi);
+  clip-path: polygon(0 0, 100% 0, 100% 40%, 85% 90%, 70% 35%, 52% 100%, 36% 45%, 18% 85%, 0 30%);
+}
+.jw-fall {
+  position: absolute; z-index: 30; pointer-events: none; background: var(--paper-hi); border: 1px dashed var(--muted);
+  display: flex; align-items: center; justify-content: center; padding: 0; animation: jw-fall 620ms cubic-bezier(0.5, 0, 0.75, 0) forwards;
+}
+@keyframes jw-fall { 25% { transform: translateY(6px) rotate(7deg); } 100% { transform: translate(14px, 160px) rotate(24deg); opacity: 0; } }
+.jw-note { position: relative; background: var(--pink); padding: 14px 14px 12px; transform: rotate(1deg); display: flex; flex-direction: column; gap: 6px; }
+.jw-note .tape { width: 40px; height: 15px; margin-left: -20px; top: -8px; transform: rotate(3deg); }
+.jw-note h2 { font-size: 12px; letter-spacing: 0.06em; font-family: var(--mono); font-weight: 700; }
+.jw-note p { margin: 0; font-size: 17px; line-height: 1.3; font-weight: 600; }
+.jw-laser { display: none; }
+
+/* The wall: one block per month, the top five twice the size with a grade stamp. */
+.jw-wall { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.jw-month { display: flex; flex-direction: column; gap: 14px; }
+.jw-mhead { display: flex; align-items: center; gap: 10px; }
+.jw-mhead h2 { font-size: 26px; background: var(--ink); color: var(--paper); padding: 2px 8px 0; transform: rotate(-1.5deg); }
+.jw-mhead .d { font-size: 13px; font-weight: 700; }
+.jw-mhead::after { content: ""; flex: 1; height: 2px; background: var(--ink); }
+.jw-month.empty .jw-mhead h2 { background: transparent; color: var(--muted); outline: 2px dashed var(--rule); outline-offset: -2px; }
+.jw-month.empty .jw-mhead .d { color: var(--muted); }
+.jw-month.empty .jw-mhead::after { background: var(--rule); }
+.jw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 12px 8px; grid-auto-flow: row dense; }
+.jw-item { position: relative; display: block; padding: 0; border: none; background: none; cursor: pointer; transform: rotate(var(--r)); }
+.jw-item.top { grid-column: span 2; grid-row: span 2; }
+.jw-item.on .cv { outline: 3px solid var(--pink); outline-offset: 2px; }
+.jw-item .tape { width: 34px; height: 13px; margin-left: -17px; top: -7px; transform: rotate(-4deg); }
+.jw-item.top .tape { width: 52px; height: 18px; margin-left: -26px; top: -9px; }
+.jw-grade {
+  position: absolute; right: -6px; bottom: 12px; z-index: 4; background: var(--pink); color: var(--ink); font-family: var(--display);
+  font-size: 26px; line-height: 1; padding: 3px 6px 2px; transform: rotate(-7deg); box-shadow: 0 2px 0 var(--ink);
+}
+.jw-grade b { font-family: var(--mono); font-size: 11px; font-weight: 700; }
+
+@media (min-width: 1000px), (min-width: 700px) and (orientation: landscape) {
+  /* The wall takes the room of both panes until an issue opens beside it. */
+  .pane.list.jwpane { width: auto; flex: 1; min-width: 0; grid-column: 1 / -1; }
+  .pane.list.jwpane.withdetail { grid-column: 1; width: clamp(560px, 58vw, 1100px); }
+  .jw.wide .jw-body { flex-direction: row; align-items: flex-start; gap: 34px; padding-left: 8px; }
+  .jw.wide .jw-col { width: 360px; flex: none; position: sticky; top: 8px; }
+  .jw.wide .jw-grid { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 14px 10px; }
+  .jw.wide .jw-wall { flex: 1; }
+}
+
+/* On open: the copier prints the flyer line by line under a laser, the sheet settles, then the covers go up month by month. */
+@media (prefers-reduced-motion: no-preference) {
+  .jw-laser {
+    display: block; position: absolute; left: -14px; right: -14px; top: 0; height: 3px; z-index: 6; pointer-events: none; opacity: 0;
+    background: #fff; box-shadow: 0 0 0 1px var(--pink), 0 0 12px 4px rgba(255, 46, 136, 0.75), 0 -18px 22px -6px rgba(255, 46, 136, 0.35);
+  }
+  .jw.play .jw-flyer { animation: jw-print 1100ms linear backwards; }
+  .jw.play .jw-laser { animation: jw-laser 1100ms linear both; }
+  .jw.play .jw-press { animation: jw-settle 280ms cubic-bezier(0.16, 1, 0.3, 1) 1100ms backwards; }
+  .jw.play .jw-item { animation: jw-tack 340ms cubic-bezier(0.16, 1, 0.3, 1) var(--dl) backwards; }
+  .jw.play .jw-item .tape { animation: jw-tape 200ms cubic-bezier(0.16, 1, 0.3, 1) calc(var(--dl) + 180ms) backwards; }
+  .jw.play .jw-grade { animation: jw-stamp 260ms cubic-bezier(0.3, 1.6, 0.5, 1) calc(var(--dl) + 300ms) backwards; }
+  .jw.play .jw-mhead h2 { animation: jw-tack 300ms cubic-bezier(0.16, 1, 0.3, 1) var(--dl) backwards; }
+  .jw-note { animation: jw-note 380ms cubic-bezier(0.16, 1, 0.3, 1); }
+  @keyframes jw-print { from { clip-path: inset(-14px -14px 100% -14px); } to { clip-path: inset(-14px -14px 0 -14px); } }
+  @keyframes jw-laser { 0% { top: 0; opacity: 1; } 96% { top: 100%; opacity: 1; } 100% { top: 100%; opacity: 0; } }
+  @keyframes jw-settle { from { transform: rotate(0) translateY(-4px); } }
+  @keyframes jw-tack { from { opacity: 0; transform: translateY(-18px) scale(1.12) rotate(calc(var(--r, 0deg) * -3)); filter: drop-shadow(0 12px 8px rgba(0, 0, 0, 0.35)); } }
+  @keyframes jw-tape { from { transform: rotate(-4deg) scaleX(0); } }
+  @keyframes jw-stamp { from { opacity: 0; transform: rotate(-7deg) scale(2.2); } }
+  @keyframes jw-note { from { transform: translateY(-14px) rotate(-4deg); opacity: 0; } }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jw.play .jw-flyer, .jw.play .jw-item { animation: jw-fade 300ms ease backwards; }
+  .jw-fall { display: none; }
+  @keyframes jw-fade { from { opacity: 0; } }
+}
+
+/* Bilanz: the strip that opens the wall. */
+.jw-entry {
+  display: flex; flex-direction: column; gap: 10px; width: 100%; text-align: left; border: none; cursor: pointer;
+  background: var(--ink); color: var(--paper); padding: 16px 14px 12px; transform: rotate(-0.6deg);
+}
+.jw-entry .row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.jw-entry h2 { font-size: 40px; }
+.jw-entry h2 span { color: var(--pink); }
+.jw-entry .go { font-family: var(--mono); font-weight: 700; font-size: 13px; color: var(--pink); white-space: nowrap; }
+.jw-mini { display: flex; padding: 6px 8px 0 0; overflow: hidden; }
+.jw-mini .cv { width: 34px; flex: none; margin-right: -8px; transform: rotate(var(--r)); border-color: var(--paper); }
+.jw-entry .sub { color: var(--rule); font-size: 12px; }
+
+/* Plan: once, from 20 December. */
+.jw-teaser { display: flex; align-items: center; gap: 12px; background: var(--ink); color: var(--paper); padding: 12px 6px 12px 14px; transform: rotate(-0.8deg); }
+.jw-teaser .open { all: unset; cursor: pointer; display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+.jw-teaser .open:focus-visible { outline: 3px solid var(--pink); outline-offset: 3px; }
+.jw-teaser .stk { font-family: var(--display); font-size: 24px; font-weight: 400; line-height: 1; padding: 6px 8px 4px; transform: rotate(-4deg); flex: none; }
+.jw-teaser .t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.jw-teaser strong { font-family: var(--display); font-size: 21px; font-weight: 400; text-transform: uppercase; line-height: 1; }
+.jw-teaser .d { font-size: 12px; color: var(--rule); }
+.jw-teaser .x { flex: none; width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border: none; background: none; color: var(--paper); cursor: pointer; }

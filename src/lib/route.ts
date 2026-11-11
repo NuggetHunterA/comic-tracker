@@ -6,6 +6,7 @@ import type { FoundSeries } from "../components/SeriesSearch";
 //   #stapel                    #stapel/serie/4  #stapel/serie/4/alle  #stapel/serie/4/alle/12
 //   #stapel/heft/12            #stapel/heft/12/serie/4  #stapel/heft/12/alle/4
 //   #stapel/eintragen          #stapel/serien-ordnen  #stapel/reihenfolge
+//   #stapel/jahr/2026          #stapel/jahr/2026/heft/12
 //   #katalog                   #katalog/heft/12
 //   #serien  #serien/wunsch    #serien/events  #serien/events/7
 //   #serien/serie/4            #serien/serie/4/alle  #serien/serie/4/alle/12
@@ -21,6 +22,8 @@ export type StapelSel =
   | { kind: "import" }
   | { kind: "order" }
   | { kind: "list" }
+  /** The Jahreswand of one year, maybe with an issue open over it. */
+  | { kind: "year"; year: number; issue?: number }
   | null;
 
 export type SerienSel =
@@ -73,6 +76,10 @@ function parseStapelSel(p: string[]): StapelSel {
   if (kind === "reihenfolge") return { kind: "list" };
   const id = num(a);
   if (id === undefined) return null;
+  if (kind === "jahr") {
+    const issue = b === "heft" ? num(c) : undefined;
+    return issue === undefined ? { kind: "year", year: id } : { kind: "year", year: id, issue };
+  }
   if (kind === "serie") {
     if (b !== "alle") return { kind: "series", id };
     const sel = num(c);
@@ -130,6 +137,7 @@ function stapelSelPath(s: StapelSel): string[] {
     case "import": return ["eintragen"];
     case "order": return ["serien-ordnen"];
     case "list": return ["reihenfolge"];
+    case "year": return ["jahr", String(s.year), ...(s.issue !== undefined ? ["heft", String(s.issue)] : [])];
     case "series": return ["serie", String(s.id)];
     case "all": return ["serie", String(s.id), "alle", ...(s.sel !== undefined ? [String(s.sel)] : [])];
     case "issue": return ["heft", String(s.id), ...(s.series !== undefined ? [s.fromAll ? "alle" : "serie", String(s.series)] : [])];

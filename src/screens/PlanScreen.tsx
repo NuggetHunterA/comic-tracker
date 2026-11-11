@@ -15,6 +15,8 @@ import { isSub, verlagOf } from "../lib/publisher";
 import { archiveKinds, blindEnvelope, boxEnvelopes, nextDays, restOf, seasonEnvelope, THIN_MIN_FREE } from "../lib/archive";
 import { ArchiveFlyer, BlindEnvelope, RestOfRun, SeasonFlyer } from "../components/ArchiveBox";
 
+import { YearTeaser } from "./YearTeaser";
+
 const wait = (ms: number) => new Promise((done) => window.setTimeout(done, ms));
 
 export function PlanScreen({ selected, onSelect }: { selected: number | null; onSelect: (id: number) => void }) {
@@ -88,6 +90,7 @@ export function PlanScreen({ selected, onSelect }: { selected: number | null; on
           {readToday > 0 && <span>HEUTE GELESEN: <span key={readToday} className="bump">{readToday}</span></span>}
         </span>
       </div>
+      <YearTeaser />
       <h1 style={{ fontSize: "clamp(48px, 15vw, 60px)", lineHeight: 0.92 }}>Heute<br />Abend</h1>
       {tonight.length > 0 ? (
         <>

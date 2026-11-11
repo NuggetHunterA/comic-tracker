@@ -346,17 +346,26 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-weight: 700;
 @media (prefers-reduced-motion: no-preference) {
   .sheet { animation: rise 180ms ease-out; }
 }
-/* An issue's detail comes up fresh from the copier: one pass of the scan light (folded sheet only). */
+/* An issue's detail is printed fresh from the copier: top to bottom under the pink laser, on every
+   opening and every switch to another issue. The printed edge runs 12px under the beam, so its glow lands on toner. */
 .issue-detail { position: relative; }
-.sheet .issue-detail::after {
-  content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none;
-  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.9) 40%, var(--pink) 72%, transparent) no-repeat;
-  background-size: 100% 14px; background-position: 0 -20px;
-  animation: scanpass 420ms 90ms cubic-bezier(0.45, 0, 0.55, 1) backwards;
-}
 .sheet-back { animation: dim 180ms ease-out; }
 @keyframes rise { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
-@keyframes scanpass { from { background-position: 0 -20px; } 92% { background-position: 0 calc(100% + 20px); opacity: 1; } to { background-position: 0 calc(100% + 20px); opacity: 0; } }
+@media (prefers-reduced-motion: no-preference) {
+  .issue-detail { animation: dprint 700ms linear backwards; }
+  .issue-detail::after {
+    content: ""; position: absolute; left: -14px; right: -14px; top: 0; height: 3px; margin-top: -2px; z-index: 6; pointer-events: none; opacity: 0;
+    background: #fff; box-shadow: 0 0 0 1px var(--pink), 0 0 12px 4px rgba(255, 46, 136, 0.75), 0 -18px 22px -6px rgba(255, 46, 136, 0.35);
+    animation: dlaser 700ms linear backwards;
+  }
+  .sheet .issue-detail, .sheet .issue-detail::after { animation-delay: 90ms; }
+  @keyframes dprint { from { clip-path: inset(-40px -40px calc(100% - 12px) -40px); } to { clip-path: inset(-40px -40px -12px -40px); } }
+  @keyframes dlaser { from { top: 0; opacity: 1; } 96% { opacity: 1; } to { top: 100%; opacity: 0; } }
+}
+@media (prefers-reduced-motion: reduce) {
+  .issue-detail { animation: dfade 160ms ease-out; }
+  @keyframes dfade { from { opacity: 0; } }
+}
 @keyframes dim { from { opacity: 0; } }
 
 /* ---------- Issue detail: compact facts, the toner bar at the bottom ---------- */

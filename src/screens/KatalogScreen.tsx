@@ -10,6 +10,8 @@ import { useConnect } from "../lib/connect";
 import { infiniteHref } from "../lib/infiniteLink";
 import { ErrorNote } from "../components/ErrorNote";
 import { report } from "../lib/errors";
+import { useSyncStatus } from "../lib/syncStatus";
+import { isNetworkError, stampLabel } from "../lib/offline";
 
 type Tab = "dc" | "marvel";
 const PUBLISHERS: Record<Tab, string[]> = { dc: ["DC Comics"], marvel: ["Marvel"] };
@@ -22,7 +24,7 @@ export function KatalogList({ month, setMonth, selected, onSelect }: {
   selected: number | null;
   onSelect: (id: number) => void;
 }) {
-  const { data, today, remember } = useStore();
+  const { data, today, remember, offline } = useStore();
   const [verlag, setVerlag] = useState<Tab>("dc");
   const [mine, setMine] = useState(false);
   const [firsts, setFirsts] = useState(false);
@@ -30,11 +32,14 @@ export function KatalogList({ month, setMonth, selected, onSelect }: {
   const [error, setError] = useState<{ text: string; retry: () => void } | null>(null);
   const [attempt, setAttempt] = useState(0);
   const { connect, markRead } = useConnect(today);
+  const [noNet, setNoNet] = useState(false);
+  const sync = useSyncStatus(`${today}|${month}|${offline ? "off" : "on"}`);
 
   useEffect(() => {
     let stale = false;
     setRows(null);
     setError(null);
+    setNoNet(false);
     const end = addDays(monthStart(month, 1), -1);
     supabase
       .from("issues")
@@ -46,13 +51,14 @@ export function KatalogList({ month, setMonth, selected, onSelect }: {
       .limit(1000)
       .then(({ data: d, error: e }) => {
         if (stale) return;
+        if (e && isNetworkError(e)) return setNoNet(true);
         if (e) setError({ text: report(e), retry: () => setAttempt((n) => n + 1) });
         const list = (d ?? []) as unknown as Row[];
         setRows(list);
         remember(list.map(({ series: _s, ...i }) => i), list.map((r) => r.series));
       });
     return () => { stale = true; };
-  }, [month, verlag, remember, attempt]);
+  }, [month, verlag, remember, offline, attempt]);
 
   const followed = useMemo(() => new Set(data?.followed.map((f) => f.series_id)), [data]);
   const shown = useMemo(() => {
@@ -94,6 +100,20 @@ export function KatalogList({ month, setMonth, selected, onSelect }: {
           </button>
         </div>
       </div>
+      {!offline && sync && !sync.stuck && sync.lastOk && (
+        <div className="syncline">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="square" aria-hidden="true">
+            <path d="M20 12a8 8 0 0 1-14.3 4.9M4 12A8 8 0 0 1 18.3 7.1" /><path d="M18.5 3v4.5H14M5.5 21v-4.5H10" />
+          </svg>
+          <span>METRON · ABGEGLICHEN {stampLabel(sync.lastOk)}</span>
+        </div>
+      )}
+      {!offline && sync?.stuck && (
+        <div className="syncwarn" role="status">
+          <span className="stk">{sync.lastOk ? `METRON HÄNGT SEIT ${stampLabel(sync.lastOk)}` : "METRON HÄNGT"}</span>
+          <span className="mut">Neue Hefte und Termine können fehlen. Der Abgleich versucht es jede Stunde wieder.</span>
+        </div>
+      )}
       <div role="tablist" className="tabs">
         <button type="button" role="tab" aria-selected={verlag === "dc"} className={`seg ${verlag === "dc" ? "on" : ""}`} onClick={() => setVerlag("dc")}>DC</button>
         <button type="button" role="tab" aria-selected={verlag === "marvel"} className={`seg ${verlag === "marvel" ? "on" : ""}`} onClick={() => setVerlag("marvel")}>Marvel</button>
@@ -109,12 +129,19 @@ export function KatalogList({ month, setMonth, selected, onSelect }: {
           }}
         />
       )}
-      <div className="chips">
+      {!noNet && <div className="chips">
         <button type="button" className={`chip ${mine ? "on" : ""}`} aria-pressed={mine} onClick={() => setMine(!mine)}>Meine Serien</button>
         <button type="button" className={`chip ${firsts ? "on" : ""}`} aria-pressed={firsts} onClick={() => setFirsts(!firsts)}>#1 &amp; Neustarts</button>
-      </div>
+      </div>}
       <ErrorNote error={error?.text ?? null} onRetry={error?.retry} />
-      {rows === null && !error && <p className="d mut">LÄDT …</p>}
+      {noNet && (
+        <div className="empty">
+          <strong style={{ fontSize: 17 }}>Der Katalog braucht Netz.</strong>
+          <span className="mut">Plan und Stapel laufen weiter. „Gelesen“ und Bewertungen merkt sich die App und speichert sie später.</span>
+          <a className="btn solid" href="#plan" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none", padding: "0 16px" }}>Zum Plan</a>
+        </div>
+      )}
+      {rows === null && !error && !noNet && <p className="d mut">LÄDT …</p>}
       {rows !== null && !error && shown.length === 0 && (
         <div className="empty">
           <strong>Hier ist noch nichts.</strong>

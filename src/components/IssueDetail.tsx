@@ -59,7 +59,7 @@ function useDesk() {
 }
 
 function IssueDetailBody({ issueId, onClose }: Props) {
-  const { data, today, plan, list, moveTo, release } = useStore();
+  const { data, today, plan, list, moveTo, release, markRead: read, rate } = useStore();
   const { run, retry, busy, error } = useRun();
   const { snapshot, offerRead } = useUndo();
   const [picked, setPickFormat] = useState<Format | null>(null);
@@ -102,7 +102,7 @@ function IssueDetailBody({ issueId, onClose }: Props) {
     const rip = cv ? ripCover(cv) : null;
     const before = snapshot(issueId);
     await run(async () => {
-      await Promise.all([actions.markRead(issueId, today), new Promise((done) => window.setTimeout(done, RIP_MS))]);
+      await Promise.all([read(issueId), new Promise((done) => window.setTimeout(done, RIP_MS))]);
       if (before) offerRead(before);
     });
     rip?.restore();
@@ -232,7 +232,7 @@ function IssueDetailBody({ issueId, onClose }: Props) {
                   setStamped(n);
                   thud(cover(), 230);
                 }
-                run(() => actions.rate(issueId, ui.rating === n ? null : n));
+                run(() => rate(issueId, ui.rating === n ? null : n));
               }}>{n}</button>
           ))}
         </div>

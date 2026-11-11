@@ -11,8 +11,13 @@ Persönlicher Lese-Tracker für Comics: Plan für jeden Abend, Stapel ungelesene
 ```sh
 npm install
 npm run dev     # lokal
-npm test        # Plan-Logik
+npm test        # Plan-Logik und Routen
+npm run e2e     # Smoke-Test im Browser (Playwright, Supabase aus Fixtures)
 npm run build
 ```
 
 Die Datenbank-Migrationen liegen in `supabase/migrations`.
+
+Jede Ansicht hat eine eigene Adresse im Hash, z. B. `#plan/heft/12`, `#stapel/serie/4/alle` oder `#serien/events/7` (alle Formen in `src/lib/route.ts`). Die Zurück-Taste schließt so ein offenes Heft, und Links führen direkt dorthin.
+
+Der Datenzugriff ist geteilt: `src/lib/load.ts` lädt, `src/lib/listSync.ts` rechnet den Plan und hält die Leseliste in Supabase aktuell, `src/lib/actions.ts` schreibt. `src/lib/store.tsx` setzt das zusammen.

@@ -40,13 +40,8 @@ function useVerlagFilter(): [VerlagFilter, (f: VerlagFilter) => void] {
   return [f, set];
 }
 
-export type SerienSel =
-  | { kind: "series"; id: number; found?: FoundSeries }
-  | { kind: "all"; id: number; sel?: number }
-  | { kind: "issue"; id: number; back?: SerienSel }
-  | { kind: "event"; id: number }
-  | null;
-export type SerienTab = "serien" | "wunsch" | "events";
+export type { SerienSel, SerienTab } from "../lib/route";
+import type { SerienSel, SerienTab } from "../lib/route";
 
 interface Relaunch { old: number; series: Series; first: Issue | null }
 

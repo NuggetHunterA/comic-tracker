@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { useStore } from "../lib/store";
 import { report } from "../lib/errors";
+import { isNetworkError } from "../lib/offline";
 
 /**
  * Runs a write, then reloads. Keeps the last error, in German, for display;
@@ -22,7 +23,7 @@ export function useRun() {
         last.current = null;
         return true;
       } catch (e) {
-        setError(report(e));
+        setError(isNetworkError(e) ? "Geht nur mit Netz. „Gelesen“ und Bewertungen merkt sich die App auch ohne." : report(e));
         return false;
       } finally {
         setBusy(false);

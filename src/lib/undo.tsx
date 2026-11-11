@@ -30,7 +30,7 @@ interface UndoCtx {
 const Ctx = createContext<UndoCtx | null>(null);
 
 export function UndoProvider({ children }: { children: ReactNode }) {
-  const { data, list, reload } = useStore();
+  const { data, list, reload, takeBack } = useStore();
   const [offer, setOffer] = useState<ReadUndo | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +62,11 @@ export function UndoProvider({ children }: { children: ReactNode }) {
     setBusy(true);
     setError(null);
     try {
+      // Still waiting for the network: dropping the waiting write is the whole undo.
+      if (await takeBack(offer.issueId, offer.before)) {
+        setOffer(null);
+        return true;
+      }
       const { error: e1 } = await supabase.from("user_issues").update(offer.before).eq("issue_id", offer.issueId);
       if (e1) throw e1;
       if (offer.slot) {
@@ -83,7 +88,7 @@ export function UndoProvider({ children }: { children: ReactNode }) {
     } finally {
       setBusy(false);
     }
-  }, [offer, list, reload]);
+  }, [offer, list, reload, takeBack]);
 
   const value = useMemo(
     () => ({ offer, snapshot, offerRead, dismiss, undo, busy, error }),

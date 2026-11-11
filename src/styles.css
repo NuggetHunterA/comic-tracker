@@ -721,3 +721,26 @@ button.mrow:hover > span { text-decoration: underline; text-decoration-color: va
 /* Paused series and finished events step back by their covers; their text keeps full contrast. */
 .sr.paused .cv { opacity: 0.5; }
 .evdone .strip, .evdone .ticks { opacity: 0.55; }
+
+/* ---------- Offline: black strip over the panes, light for a moment when the network is back ---------- */
+.offline {
+  position: sticky; top: 0; z-index: 15; display: flex; align-items: center; gap: 10px; padding: 9px 20px;
+  background: var(--ink); color: var(--paper); font-family: var(--mono); font-size: 13px;
+}
+.offline svg { flex: none; }
+.offline .s { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.offline b { font-weight: 700; letter-spacing: 0.04em; }
+.offline .q { margin-left: auto; flex: none; background: var(--pink); color: var(--ink); font-weight: 700; padding: 2px 7px; transform: rotate(1.5deg); white-space: nowrap; }
+.offline.back { background: var(--paper-hi); color: var(--ink); border-bottom: 3px solid var(--ink); }
+@media (min-width: 1000px), (min-width: 700px) and (orientation: landscape) {
+  .panes { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .panes > .offline { grid-column: 1 / -1; grid-row: 1; }
+  .panes > .pane { grid-row: 2; }
+}
+
+/* ---------- Katalog: Metron sync state ---------- */
+.syncline { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 13px; color: var(--muted); margin-top: -6px; }
+.syncline svg { flex: none; }
+.syncwarn { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.syncwarn .stk { transform: rotate(-1deg); padding: 3px 8px; }
+.syncwarn .mut { font-size: 14px; line-height: 1.35; }

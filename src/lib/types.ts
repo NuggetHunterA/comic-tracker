@@ -1,5 +1,5 @@
 export type Format = "print" | "infinite" | "webtoon";
-export type Status = "wishlist" | "expected" | "pile" | "read" | "dismissed";
+export type Status = "wishlist" | "pile" | "read" | "dismissed";
 
 export interface Series {
   id: number;

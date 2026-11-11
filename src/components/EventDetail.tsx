@@ -51,7 +51,7 @@ export function EventDetail({ eventId, onGone }: { eventId: number; onGone: () =
   const byId = new Map(items.map((i) => [i.issue.id, i]));
   const isOpen = (i: Issue) => {
     const st = data.userIssues.get(i.id)?.status;
-    return st === "pile" || st === "expected";
+    return st === "pile";
   };
   const gaps = seriesGaps(order, isOpen, items.map((i) => i.issue));
   const tonight = new Set(plan.find((e) => e.date === today)?.entries.map((x) => x.issueId) ?? []);

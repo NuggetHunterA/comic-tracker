@@ -68,7 +68,7 @@ function Shell() {
   const [serienSel, setSerienSel] = useState<SerienSel>(null);
 
   const tonight = plan.find((e) => e.date === today)?.entries ?? [];
-  const pile = items.filter((i) => (i.ui.status === "pile" || i.ui.status === "expected") && i.readable).length;
+  const pile = items.filter((i) => i.ui.status === "pile" && i.readable).length;
   const counters: Record<Tab, string> = {
     plan: `${tonight.length} HEUTE`,
     stapel: String(pile),

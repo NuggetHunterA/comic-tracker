@@ -46,7 +46,7 @@ Unlike pull-list apps (League of Comic Geeks etc.), it plans the reading itself:
 
 ## Brand Commitments
 
-Visual direction chosen by Adrian: B "Torn Flyer / Kopierer-Wand" (photocopy grey, toner black, neon pink spot colour, taped-up covers; expected Infinite issues stay a photocopy until readable). Navigation: "Fehldruck" bar (black, large Anton labels with counters, active item on an offset pink print block; side rail when unfolded).
+Visual direction chosen by Adrian: B "Torn Flyer / Kopierer-Wand" (photocopy grey, toner black, neon pink spot colour, taped-up covers; expected Infinite issues stay a photocopy until readable). Navigation: "Fehldruck" bar (black, large Anton labels with counters, active item on an offset pink print block; side rail when unfolded). "Nachtdruck" from 21:00 to 06:00 (Adrian's choice): the wall prints in negative (toner grey ground, paper grey type, pink slightly quieter, the bar stays black, expected issues as negative photocopies); the first opening of each evening plays one copier-lamp pass over the screen, later openings start dark, 06:00 switches back silently.
 
 ## Evidence on Hand
 

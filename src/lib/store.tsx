@@ -137,6 +137,8 @@ async function load(): Promise<Data> {
 
 const Ctx = createContext<Store | null>(null);
 const NO_LIST: ListEntry[] = [];
+const NO_PLAN: Store["plan"] = [];
+const NO_STALLED: Store["stalled"] = [];
 
 /** The rules a sort goes by, as text: series ranking and every event's order. */
 function rulesKey(ranks: SeriesRank[], events: EventView[]): string {
@@ -235,7 +237,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return ui?.status === "read" && (ui.read_on ?? "0000") > m ? ui.read_on ?? "0000" : m;
     }, "");
     const startedEvents = events.filter((v) => v.read > 0).sort((a, b) => lastRead(b).localeCompare(lastRead(a))).map((v) => v.event.id);
-    const open = items.filter((i) => (i.ui.status === "pile" || i.ui.status === "expected") && !i.ui.skip_plan);
+    const open = items.filter((i) => i.ui.status === "pile" && !i.ui.skip_plan);
     const planIssues: PlanIssue[] = open.map((i) => ({
       id: i.issue.id,
       seriesId: i.issue.series_id,
@@ -314,8 +316,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     await save(next, planned.key);
   }, [planned, save]);
 
-  const plan = planned?.plan ?? [];
-  const stalled = planned?.stalled ?? [];
+  const plan = planned?.plan ?? NO_PLAN;
+  const stalled = planned?.stalled ?? NO_STALLED;
   const list = planned?.list ?? NO_LIST;
 
   const value = useMemo(
@@ -346,10 +348,7 @@ async function check<T extends { error: unknown }>(p: PromiseLike<T>): Promise<T
 
 export const actions = {
   markRead: (issueId: number, today: string) =>
-    Promise.all([
-      check(supabase.from("user_issues").update({ status: "read", read_on: today, updated_at: new Date().toISOString() }).eq("issue_id", issueId)),
-      check(supabase.from("plan_entries").delete().eq("issue_id", issueId)),
-    ]),
+    check(supabase.from("user_issues").update({ status: "read", read_on: today, updated_at: new Date().toISOString() }).eq("issue_id", issueId)),
   markUnread: (issueId: number) =>
     check(supabase.from("user_issues").update({ status: "pile", read_on: null, rating: null }).eq("issue_id", issueId)),
   /** Read before the app knew about it: no reading date, never on the pile. */
@@ -372,10 +371,7 @@ export const actions = {
   rate: (issueId: number, rating: number | null) =>
     check(supabase.from("user_issues").update({ rating }).eq("issue_id", issueId)),
   skipPlan: (issueId: number, skip: boolean) =>
-    Promise.all([
-      check(supabase.from("user_issues").update({ skip_plan: skip }).eq("issue_id", issueId)),
-      check(supabase.from("plan_entries").delete().eq("issue_id", issueId)),
-    ]),
+    check(supabase.from("user_issues").update({ skip_plan: skip }).eq("issue_id", issueId)),
   setBought: (issueId: number, boughtOn: string | null) =>
     check(supabase.from("user_issues").update({ bought_on: boughtOn }).eq("issue_id", issueId)),
   setFormat: (issueId: number, format: Format) =>
@@ -383,10 +379,7 @@ export const actions = {
   addIssue: (issueId: number, status: "pile" | "wishlist", format: Format | null, extra: Partial<UserIssue> = {}) =>
     check(supabase.from("user_issues").upsert({ issue_id: issueId, status, format, ...extra }, { onConflict: "user_id,issue_id" })),
   removeIssue: (issueId: number) =>
-    Promise.all([
-      check(supabase.from("plan_entries").delete().eq("issue_id", issueId)),
-      check(supabase.from("user_issues").delete().eq("issue_id", issueId)),
-    ]),
+    check(supabase.from("user_issues").delete().eq("issue_id", issueId)),
   dismissIssue: (issueId: number) =>
     check(supabase.from("user_issues").update({ status: "dismissed" }).eq("issue_id", issueId)),
   follow: async (seriesId: number, format: Format) => {

@@ -94,7 +94,7 @@ export function SerienList({ tab, setTab, sel, onSelect }: {
   const wishIssues = items.filter((i) => i.ui.status === "wishlist" && shows(i.issue.series_id)).sort((a, b) => (a.issue.store_date ?? "").localeCompare(b.issue.store_date ?? ""));
   const wishSeries = data.wishlistSeries.filter(shows);
   const wishCount = wishIssues.length + wishSeries.length;
-  const openCount = (sid: number) => items.filter((i) => i.issue.series_id === sid && (i.ui.status === "pile" || i.ui.status === "expected")).length;
+  const openCount = (sid: number) => items.filter((i) => i.issue.series_id === sid && i.ui.status === "pile").length;
 
   const shownEvents = events.filter(showsEvent);
   const done = shownEvents.filter(eventDone);
@@ -247,7 +247,7 @@ export function SeriesDetail({ seriesId, found, onSelect, onGone }: {
   const s = data.series.get(seriesId);
   const f = data.followed.find((x) => x.series_id === seriesId);
   if (!f) return <UnfollowedSeries seriesId={seriesId} found={found} onSelect={onSelect} />;
-  const open = items.filter((i) => i.issue.series_id === seriesId && (i.ui.status === "pile" || i.ui.status === "expected"))
+  const open = items.filter((i) => i.issue.series_id === seriesId && i.ui.status === "pile")
     .sort((a, b) => (a.issue.sort_number ?? 0) - (b.issue.sort_number ?? 0));
   const read = items.filter((i) => i.issue.series_id === seriesId && i.ui.status === "read").length;
   const relaunch = relaunches.find((r) => r.old === seriesId);

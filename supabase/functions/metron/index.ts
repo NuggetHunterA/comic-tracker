@@ -182,7 +182,7 @@ async function syncWriter(issueId: number): Promise<string | null> {
 
 // A few pile issues per run, so most details already know their writer.
 async function syncPileWriters(log: string[]) {
-  const { data: open } = await db.from("user_issues").select("issue_id").in("status", ["pile", "expected"]);
+  const { data: open } = await db.from("user_issues").select("issue_id").eq("status", "pile");
   const ids = [...new Set((open ?? []).map((u) => u.issue_id))];
   if (!ids.length) return;
   const todo: number[] = [];

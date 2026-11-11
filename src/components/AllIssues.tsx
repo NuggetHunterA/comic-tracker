@@ -16,7 +16,7 @@ type Filter = "alle" | RunState;
 
 export function runState(ui: UserIssue | undefined): RunState {
   if (ui?.status === "read") return "read";
-  if (ui?.status === "pile" || ui?.status === "expected") return "pile";
+  if (ui?.status === "pile") return "pile";
   return "none";
 }
 

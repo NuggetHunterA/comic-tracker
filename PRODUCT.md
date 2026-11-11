@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-Delegated and approved: Vite + React + TypeScript as an installable PWA on GitHub Pages (`/comic-tracker/`). Data in the Supabase project sport-recap, own schema `comics`, login by email magic link. The `metron` Edge Function syncs Metron hourly via pg_cron (followed series and the catalog for last month to two months ahead) and serves series search for the app.
+Delegated and approved: Vite + React + TypeScript as an installable PWA on GitHub Pages (`/comic-tracker/`). Data in the Supabase project sport-recap, own schema `comics`. Adrian is the only user: he signs in with email and password once per device and the session stays on the device (no shared app account, no credentials in the bundle). The `metron` Edge Function syncs Metron hourly via pg_cron (followed series and the catalog for last month to two months ahead) and serves series search for the app.
 
 ## Users
 
@@ -31,10 +31,11 @@ Unlike pull-list apps (League of Comic Geeks etc.), it plans the reading itself:
 
 ## Capabilities and Constraints
 
-- Areas: Plan (today + next 14 evenings), Stapel (pile), Katalog (monthly releases, tabs DC and Marvel, cover grid), Meine Serien (followed series, wishlist, events; filter chips Alle · DC · Marvel).
+- Areas: Plan (tonight plus the next evenings), Stapel (pile, with the whole reading order evening by evening and the Bilanz), Katalog (monthly releases, tabs DC and Marvel, cover grid), Meine Serien (followed series, wishlist, events; filter chips Alle · DC · Marvel).
 - Series: search any Metron series from Meine Serien; every series has "Alle Hefte", the full run of that volume newest first, each issue marked read, on the pile or missing. Older issues can be marked as read earlier (no reading date), one by one or up to a number, and a series can be put on the pile from a number on (as regular pile issues, after the old pile); read and pile issues stay untouched.
-- Issue states: Wunschliste, Erwartet, Stapel, Gelesen. Formats: Print, Infinite (Ultra, DC) and Webtoon (Ultimate, Marvel). Adrian reads in the subscription or buys print, never digital single issues.
-- Plan rules: only readable issues; series in number order; old pile first, then new issues; read an event in one go (events are cross-series reading orders Adrian keeps in Meine Serien, each with a colour; Metron story arcs are not used), switch series only after an event; a started event comes first every evening as far as its issues are readable; without an event, read blocks of several issues per series; max 3 per evening; one publisher per evening (the first readable issue sets it; the other publisher only fills up when nothing of this one is readable; manual moves are exempt); manual moves are pinned.
+- Issue states: Wunschliste, Stapel, Gelesen. "Erwartet" is not stored: a pile issue counts as expected until its format makes it readable (print once bought, Infinite and Webtoon after the delay). Formats: Print, Infinite (Ultra, DC) and Webtoon (Ultimate, Marvel). Adrian reads in the subscription or buys print, never digital single issues.
+- Reading list: the plan is a saved list (`reading_list`) read top to bottom, max_per_evening issues an evening (default 3), laid out as far ahead as there are dated issues. Reading an issue never reshuffles it; the app sorts it by the plan rules only when Adrian asks or the rules (series ranking, events) change, and new issues are slotted in. Issues moved by hand keep their place through sorts and carry a hand mark until released back to the rules.
+- Plan rules: only readable issues; series in number order; old pile first, then new issues; read an event in one go (events are cross-series reading orders Adrian keeps in Meine Serien, each with a colour; Metron story arcs are not used), switch series only after an event; a started event comes first every evening as far as its issues are readable; without an event, read blocks of several issues per series; max 3 per evening; one publisher per evening (the first readable issue sets it; the other publisher only fills up when nothing of this one is readable; manual moves are exempt).
 - Rating on read: 1 to 10, whole steps.
 - Annuals and specials of followed series go to the wishlist only. Relaunches are suggested, never auto-followed.
 - Only the main cover is shown.

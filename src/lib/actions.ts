@@ -91,12 +91,5 @@ export const actions = {
     await check(supabase.from("event_issues").upsert(issueIds.map((id, k) => ({ event_id: eventId, issue_id: id, position: k + 1 })), { onConflict: "user_id,issue_id" }));
     await check(supabase.from("events").update({ manual_order: true }).eq("id", eventId));
   },
-  /** Keeps the series in this order; the first `whole` of them are read to the end in one go. */
-  orderSeries: async (seriesIds: number[], whole: number) => {
-    await check(supabase.from("series_order").delete().gte("position", 0));
-    await check(supabase.from("series_order").insert(seriesIds.map((id, k) => ({ series_id: id, position: k + 1, whole: k < whole }))));
-  },
-  /** Back to date order: the plan forgets the ranking. */
-  sortSeriesByDate: () => check(supabase.from("series_order").delete().gte("position", 0)),
   sortEventByDate: (eventId: number) => check(supabase.from("events").update({ manual_order: false }).eq("id", eventId)),
 };

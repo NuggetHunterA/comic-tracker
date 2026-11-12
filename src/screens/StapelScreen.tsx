@@ -203,11 +203,6 @@ function StapelOrder({ sel, onSelect }: { sel: StapelSel; onSelect: (s: StapelSe
             Hefte ordnen
             {added > 0 && <span className="stk" style={{ fontSize: 12, padding: "1px 5px" }}>{added} NEU</span>}
           </button>
-          <button type="button" className={`btn ${sel?.kind === "order" ? "solid" : ""}`} style={{ minHeight: 40, fontSize: 14, display: "inline-flex", alignItems: "center", gap: 8 }}
-            aria-pressed={sel?.kind === "order"} onClick={() => onSelect({ kind: "order" })}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" aria-hidden="true"><path d="M7 4v16M7 4l-3 3M7 4l3 3M17 20V4M17 20l-3-3M17 20l3-3" /></svg>
-            Serien ordnen
-          </button>
         </span>
       </div>
       {evenings.length > 0 && (

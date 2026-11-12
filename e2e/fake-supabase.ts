@@ -52,7 +52,6 @@ const TABLES: Record<string, unknown[]> = {
   reading_list: [],
   events: [],
   event_issues: [],
-  series_order: [],
   archive_suggestions: ARCHIVE,
   series: SERIES,
   issues: [...ISSUES, ...ARCHIVE_ISSUES],

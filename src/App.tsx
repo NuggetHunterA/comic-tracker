@@ -14,7 +14,6 @@ import { Jahreswand } from "./screens/Jahreswand";
 import { KatalogList } from "./screens/KatalogScreen";
 import { SerienList, SeriesDetail } from "./screens/SerienScreen";
 import { EventDetail } from "./components/EventDetail";
-import { SeriesOrder } from "./components/SeriesOrder";
 import { IssueOrder } from "./components/IssueOrder";
 import { ErrorNote } from "./components/ErrorNote";
 import { explain } from "./lib/errors";
@@ -135,7 +134,6 @@ function Shell() {
     const body =
       s?.kind === "import" ? <ImportForm onDone={closeStapel} /> :
       s?.kind === "ansage" ? <Ansage onDone={() => backTo({ tab: "stapel", sel: null })} /> :
-      s?.kind === "order" ? <SeriesOrder /> :
       s?.kind === "list" ? <IssueOrder /> :
       s?.kind === "series" ? <StapelSeries seriesId={s.id} onSelect={setStapelSel} /> :
       s?.kind === "all" ? (

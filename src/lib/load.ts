@@ -1,7 +1,7 @@
 // Loading: reads everything the app shows from Supabase in one go.
 import type { ListEntry } from "./plan";
 import { supabase } from "./supabase";
-import type { ArchiveSuggestion, EventIssue, EventRow, Followed, Issue, Series, SeriesRank, Settings, UserIssue } from "./types";
+import type { ArchiveSuggestion, EventIssue, EventRow, Followed, Issue, Series, Settings, UserIssue } from "./types";
 
 export interface Data {
   settings: Settings;
@@ -13,7 +13,6 @@ export interface Data {
   series: Map<number, Series>;
   events: EventRow[];
   eventIssues: EventIssue[];
-  seriesOrder: SeriesRank[];
   /** The saved reading list, top to bottom. */
   readingList: ListEntry[];
   /** The rules the list was last sorted by (see rulesKey). */
@@ -35,7 +34,7 @@ async function inChunks<T>(ids: number[], fetch: (chunk: number[]) => PromiseLik
 }
 
 export async function load(): Promise<Data> {
-  const [settings, followed, wishlist, dismissed, userIssues, list, events, eventIssues, seriesOrder, archive] = await Promise.all([
+  const [settings, followed, wishlist, dismissed, userIssues, list, events, eventIssues, archive] = await Promise.all([
     // All columns, so the app still loads where webtoon_delay_days is not migrated yet.
     supabase.from("settings").select("*").maybeSingle(),
     supabase.from("followed_series").select("series_id, default_format, paused, created_at"),
@@ -45,11 +44,10 @@ export async function load(): Promise<Data> {
     supabase.from("reading_list").select("issue_id, position, manual, added").order("position"),
     supabase.from("events").select("id, name, short, color, manual_order, created_at").order("created_at"),
     supabase.from("event_issues").select("event_id, issue_id, position"),
-    supabase.from("series_order").select("series_id, position, whole").order("position"),
     supabase.from("archive_suggestions").select("id, kind, season, series_id, issue_ids, title, label_year, label_writer, reason, verified, status, taken_count, valid_from")
       .in("status", ["open", "taken"]).order("id"),
   ]);
-  for (const r of [settings, followed, wishlist, dismissed, userIssues, list, events, eventIssues, seriesOrder]) if (r.error) throw r.error;
+  for (const r of [settings, followed, wishlist, dismissed, userIssues, list, events, eventIssues]) if (r.error) throw r.error;
   // Before migration 0015 the table is missing; the app works without the box.
   const envelopes = archive.error ? [] : ((archive.data ?? []) as ArchiveSuggestion[]);
 
@@ -82,7 +80,6 @@ export async function load(): Promise<Data> {
     series: new Map(series.map((s) => [s.id, s])),
     events: (events.data ?? []) as EventRow[],
     eventIssues: links,
-    seriesOrder: (seriesOrder.data ?? []) as SeriesRank[],
     readingList: ((list.data ?? []) as { issue_id: number; manual: boolean; added: boolean }[]).map((r) => ({ issueId: r.issue_id, manual: r.manual, added: r.added })),
     listRules: s?.list_rules ?? null,
     archive: envelopes,

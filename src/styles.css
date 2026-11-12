@@ -1109,58 +1109,6 @@ button.mrow:hover > span { text-decoration: underline; text-decoration-color: va
 .gx-seal { position: absolute; left: 50%; top: 50%; margin: -48px 0 0 -48px; }
 .gx-skip { position: absolute; bottom: calc(24px + env(safe-area-inset-bottom)); font-size: 12px; color: var(--muted); }
 
-/* ---------- Nachtdruck: 21:00 to 06:00 the wall prints in negative (lib/nachtdruck.ts) ---------- */
-/* Toner grey ground, paper grey type, pink a touch quieter. Publisher marks and event colours stay. */
-:root[data-print="nacht"] {
-  --paper: #1a1a18;
-  --paper-hi: #252522;
-  --ink: #e2e1da;
-  --muted: #a2a19a;
-  --grey: #6f6e68;
-  --rule: #393935;
-  --pink: #e0307f;
-  --copy: #2a2a27;
-  --tape: rgba(178, 168, 138, 0.5);
-  color-scheme: dark;
-}
-/* The bars at the screen's edge stay black: inside them the day ink still holds. */
-[data-print="nacht"] :is(.nav, .toner, .undo:not(.failed), .offline:not(.back)) { --ink: #060606; --paper: #e2e1da; }
-[data-print="nacht"] .nav .ps { background: #4a4a45; }
-[data-print="nacht"] .nav .c { color: #8a8983; }
-/* Type on pink and on event colours stays black. */
-[data-print="nacht"] :is(.stk, .tape.label, .btn.hot, .rt.on, .toner.rate button.on, .marker, .drop-connect .w, .oops, .undo.failed,
-  .statbtn.on, .bz-rank li:first-child .gstamp, .jw-facts .g, .jw-note, .jw-grade, .evseal .plus, .etape, .evband, .btag, .gx-band) {
-  --ink: #111111; color: #111111;
-}
-/* Paper that is pinned to the wall (archive flyer, envelopes) stays day paper with day ink. */
-[data-print="nacht"] :is(.arch, .env) { --ink: #111111; --paper: #e9e8e2; --paper-hi: #f6f5f0; --muted: #55554f; --rule: #b9b8b2; --grey: #7a7973; color: #111111; }
-[data-print="nacht"] .btn.solid:hover { background: #cfcec7; }
-[data-print="nacht"] .mrow.warn { color: var(--pink); }
-[data-print="nacht"] .cell.none .cv { box-shadow: inset 0 0 0 999px rgba(26, 26, 24, 0.55); }
-[data-print="nacht"] .cell.sel.none .cv { box-shadow: inset 0 0 0 999px rgba(26, 26, 24, 0.15); }
-[data-print="nacht"] .gather { background: rgba(26, 26, 24, 0.94); }
-/* Covers lift off the toner by a hairline. */
-[data-print="nacht"] .cv { border-color: #000; box-shadow: 0 0 0 1px #3d3d39; }
-/* Expected issues: the photocopy as a negative. The image moves to a pseudo-element, so marks on the cover keep their colour. */
-[data-print="nacht"] .cv.copy.img { background-image: none !important; }
-[data-print="nacht"] .cv.copy.img::before {
-  content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: var(--art) center / cover no-repeat; filter: grayscale(1) invert(1) contrast(1.25) brightness(0.78); opacity: 0.85;
-}
-[data-print="nacht"] .cv.copy:not(.img)::after { background-image: radial-gradient(rgba(0, 0, 0, 0.55) 1px, transparent 1.5px); }
-
-/* The pass: the old print stays put, the new one is uncovered under the copier lamp. */
-.nd-pass::view-transition-old(root),
-.nd-pass::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
-.nd-pass::view-transition-new(root) { clip-path: inset(0 0 100% 0); }
-.nd-pass::view-transition-group(nd-lamp) { animation: none; z-index: 2; }
-.nd-pass::view-transition-old(nd-lamp) { animation: none; }
-.nd-lamp {
-  position: fixed; left: -5%; width: 110%; top: 0; height: 26px; pointer-events: none; view-transition-name: nd-lamp; z-index: 100;
-  background: linear-gradient(180deg, transparent 0%, rgba(255, 255, 255, 0.35) 25%, #ffffff 48%, #ffd6ea 60%, #ff2e88 74%, transparent 100%);
-  box-shadow: 0 0 34px 10px rgba(255, 255, 255, 0.28), 0 0 80px 18px rgba(255, 46, 136, 0.18);
-}
-
 /* ---------- Ansage: tell Claude what to read next ---------- */
 .titlerow .ansagebtn { margin-left: auto; }
 .ansagebtn {

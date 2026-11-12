@@ -24,7 +24,6 @@ import { AnsageStrip } from "./components/AnsageStrip";
 import { Ansage } from "./components/Ansage";
 import { backTo, navigate, onRouteChange, replaceRoute, parseRoute, type Route, type SerienSel, type SerienTab, type StapelSel } from "./lib/route";
 import { OfflineStrip } from "./components/OfflineStrip";
-import { startNachtdruck } from "./lib/nachtdruck";
 import { EventFinale } from "./components/EventFinale";
 
 // Two panes only when there is room for both: wide screens, or a Fold opened in landscape.
@@ -66,9 +65,6 @@ function Shell() {
   const { tab } = route;
   const { data, error, plan, today, items, reload } = useStore();
   const [retrying, setRetrying] = useState(false);
-  // Nachtdruck follows the clock once there is something to print over (the pass needs the plan on screen).
-  const loaded = !!data;
-  useEffect(() => (loaded ? startNachtdruck() : undefined), [loaded]);
   const retry = useCallback(() => {
     setRetrying(true);
     void reload().finally(() => setRetrying(false));

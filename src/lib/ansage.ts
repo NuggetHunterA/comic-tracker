@@ -55,7 +55,7 @@ export async function askClaude(text: string, pile: string[], today: string, max
   const { data, error } = await supabase.functions.invoke("ansage", { body: { text, pile, today, maxPerEvening } });
   if (error) {
     const res = (error as { context?: Response }).context;
-    const detail = res && (res.status === 400 || res.status === 429) ? await res.json?.().catch(() => null) : null;
+    const detail = res && (res.status === 400 || res.status === 429 || res.status === 500) ? await res.json?.().catch(() => null) : null;
     if (detail?.error) throw new Hinweis(detail.error);
     throw error;
   }

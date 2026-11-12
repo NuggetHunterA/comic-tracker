@@ -35,7 +35,7 @@ Regeln:
 - Gehört ein Heft zu einem Event, halte die Event-Reihenfolge ein.
 - Passt nichts oder verstehst du den Wunsch nicht, gib keine ids zurück und sag kurz, warum.
 
-Antwort: ein bis zwei kurze Sätze auf Deutsch, per du, ohne Floskeln. Sag, was oben liegt und wann es drankommt. Nenne Serien beim Namen, Nummern mit #.`;
+Antwort: ein bis zwei kurze Sätze auf Deutsch, per du, ohne Floskeln. Sag, was oben liegt und wann es drankommt. Nenne Serien beim Namen, Nummern mit #, Daten als Tag und Monat (z. B. 20.11.).`;
 
 const SCHEMA = {
   type: "object",
@@ -49,6 +49,15 @@ const SCHEMA = {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
+  try {
+    return await handle(req);
+  } catch (e) {
+    console.error("ansage", e);
+    return json({ error: "Claude antwortet gerade nicht. Versuch es gleich nochmal." }, 500);
+  }
+});
+
+async function handle(req: Request): Promise<Response> {
   if (req.method !== "POST") return json({ error: "Nur POST." }, 405);
 
   let body: { text?: unknown; pile?: unknown; today?: unknown; maxPerEvening?: unknown };
@@ -90,4 +99,4 @@ Deno.serve(async (req) => {
   const parsed = JSON.parse(out.text) as { reply: string; issueIds: number[] };
   const issueIds = [...new Set(parsed.issueIds)].filter((id) => known.has(id));
   return json({ reply: parsed.reply, issueIds });
-});
+}

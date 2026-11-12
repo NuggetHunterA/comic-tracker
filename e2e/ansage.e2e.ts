@@ -36,17 +36,24 @@ async function setup(page: Page, answer: { reply: string; issueIds: number[] }) 
     return route.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify(answer) });
   });
   // The browser's recognizer, replaced by one that "hears" the words one by one.
+  // After "Absolute" it stops by itself, as Chrome does after a pause; the app
+  // has to start it again and keep the words.
   await page.addInitScript(() => {
-    const words = "Ich will alle Absolute Green Arrow als Nächstes lesen".split(" ");
+    const rounds = ["Ich will alle Absolute", "Green Arrow als Nächstes lesen"].map((r) => r.split(" "));
+    let n = 0;
     class FakeRecognition {
       lang = ""; interimResults = false; continuous = false;
       onresult: ((e: unknown) => void) | null = null; onerror: ((e: unknown) => void) | null = null; onend: (() => void) | null = null;
       timers: number[] = [];
       start() {
+        const words = rounds[Math.min(n++, rounds.length - 1)];
+        const last = n === rounds.length;
         words.forEach((_, k) => this.timers.push(window.setTimeout(() => {
           const t = words.slice(0, k + 1).join(" ");
           this.onresult?.({ results: [Object.assign([{ transcript: t }], { isFinal: false })] });
         }, 150 * (k + 1))));
+        // The pause: the first round ends without "Fertig".
+        if (!last) this.timers.push(window.setTimeout(() => this.onend?.(), 150 * words.length + 400));
       }
       stop() { this.timers.forEach(clearTimeout); this.onend?.(); }
       abort() { this.timers.forEach(clearTimeout); this.onend?.(); }
@@ -75,6 +82,9 @@ test("say a wish, see the evenings, take it over, take it back", async ({ page }
   await shot(page, "2-bereit");
 
   await page.getByRole("button", { name: "Sprechen" }).click();
+  // A pause after "Absolute" does not send the wish: it keeps listening.
+  await page.waitForTimeout(1000);
+  await expect(page.getByRole("button", { name: "Fertig" })).toBeVisible();
   await expect(page.getByText("Ich will alle Absolute Green")).toBeVisible();
   await shot(page, "3-hoert");
   await expect(page.getByText(/als Nächstes lesen/)).toBeVisible();

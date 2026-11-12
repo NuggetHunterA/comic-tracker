@@ -51,8 +51,8 @@ export function pullUp(list: ListEntry[], issueIds: number[]): ListEntry[] {
 }
 
 /** Sends the wish and the pile to the ansage edge function (Claude). */
-export async function askClaude(text: string, pile: string[], today: string): Promise<AnsageAnswer> {
-  const { data, error } = await supabase.functions.invoke("ansage", { body: { text, pile, today } });
+export async function askClaude(text: string, pile: string[], today: string, maxPerEvening: number): Promise<AnsageAnswer> {
+  const { data, error } = await supabase.functions.invoke("ansage", { body: { text, pile, today, maxPerEvening } });
   if (error) {
     const res = (error as { context?: Response }).context;
     const detail = res && (res.status === 400 || res.status === 429) ? await res.json?.().catch(() => null) : null;

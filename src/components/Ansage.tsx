@@ -32,7 +32,7 @@ const MIC = (
  * shows the evenings that would follow, "Übernehmen" puts them on top.
  */
 export function Ansage({ onDone }: { onDone: () => void }) {
-  const { items, list, eventOf, today, previewUp, pullUp, offline } = useStore();
+  const { data, items, list, eventOf, today, previewUp, pullUp, offline } = useStore();
   const [step, setStep] = useState<Step>({ at: "ask" });
   const [typing, setTyping] = useState(!speechSupported());
   const [draft, setDraft] = useState("");
@@ -43,7 +43,7 @@ export function Ansage({ onDone }: { onDone: () => void }) {
   const ask = async (text: string) => {
     setStep({ at: "think", text });
     try {
-      const answer = await askClaude(text, pileLines(list, items, eventOf, today), today);
+      const answer = await askClaude(text, pileLines(list, items, eventOf, today), today, data?.settings.max_per_evening ?? 3);
       setStep({ at: "show", text, answer });
     } catch (e) {
       setStep({ at: "fail", text, error: report(e) });

@@ -9,6 +9,7 @@ import type { Data } from "./load";
 import { verlagOf } from "./publisher";
 import type { SeriesRank } from "./types";
 import type { Item } from "./store";
+import { pullUp as pullUpList } from "./ansage";
 
 const NO_LIST: ListEntry[] = [];
 const NO_PLAN: Evening[] = [];
@@ -45,6 +46,12 @@ export interface ListSync {
   resort: () => Promise<void>;
   moveTo: (issueId: number, index: number) => Promise<void>;
   release: (issueId?: number) => Promise<void>;
+  /** The evenings the plan would have with these issues on top (Ansage preview). */
+  previewUp: (issueIds: number[]) => Evening[];
+  /** Puts these issues on top, moved by hand; gives back the list before, for undo. */
+  pullUp: (issueIds: number[]) => Promise<ListEntry[]>;
+  /** Puts a saved list back (undo of an Ansage). */
+  restoreList: (list: ListEntry[]) => Promise<void>;
 }
 
 export function useListSync(
@@ -104,6 +111,7 @@ export function useListSync(
       planIssues,
       list,
       sorted,
+      evenings,
       plan: evenings(list),
       stalled: stalledSeries(planIssues).map((s) => ({ issueId: s.issue.id, behind: s.behind })),
     };
@@ -145,7 +153,25 @@ export function useListSync(
     await save(next, planned.key);
   }, [planned, save]);
 
+  const previewUp = useCallback((issueIds: number[]) => {
+    if (!planned) return NO_PLAN;
+    return planned.evenings(pullUpList(planned.list, issueIds));
+  }, [planned]);
+  const pullUp = useCallback(async (issueIds: number[]) => {
+    if (!planned) return NO_LIST;
+    const before = planned.list;
+    await save(pullUpList(before, issueIds), planned.key);
+    return before;
+  }, [planned, save]);
+  const restoreList = useCallback(async (l: ListEntry[]) => {
+    if (!planned) return;
+    await save(syncList(l, planned.planIssues, planned.rules), planned.key);
+  }, [planned, save]);
+
   return {
+    previewUp,
+    pullUp,
+    restoreList,
     plan: planned?.plan ?? NO_PLAN,
     list: planned?.list ?? NO_LIST,
     stalled: planned?.stalled ?? NO_STALLED,

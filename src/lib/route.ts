@@ -22,6 +22,8 @@ export type StapelSel =
   | { kind: "import" }
   | { kind: "order" }
   | { kind: "list" }
+  /** Ansage: tell Claude what to read next. */
+  | { kind: "ansage" }
   /** The Jahreswand of one year, maybe with an issue open over it. */
   | { kind: "year"; year: number; issue?: number }
   | null;
@@ -74,6 +76,7 @@ function parseStapelSel(p: string[]): StapelSel {
   if (kind === "eintragen") return { kind: "import" };
   if (kind === "serien-ordnen") return { kind: "order" };
   if (kind === "reihenfolge") return { kind: "list" };
+  if (kind === "ansage") return { kind: "ansage" };
   const id = num(a);
   if (id === undefined) return null;
   if (kind === "jahr") {
@@ -137,6 +140,7 @@ function stapelSelPath(s: StapelSel): string[] {
     case "import": return ["eintragen"];
     case "order": return ["serien-ordnen"];
     case "list": return ["reihenfolge"];
+    case "ansage": return ["ansage"];
     case "year": return ["jahr", String(s.year), ...(s.issue !== undefined ? ["heft", String(s.issue)] : [])];
     case "series": return ["serie", String(s.id)];
     case "all": return ["serie", String(s.id), "alle", ...(s.sel !== undefined ? [String(s.sel)] : [])];

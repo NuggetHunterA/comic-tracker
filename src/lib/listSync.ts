@@ -7,7 +7,6 @@ import { check } from "./actions";
 import type { EventMark, EventView } from "./events";
 import type { Data } from "./load";
 import { verlagOf } from "./publisher";
-import type { SeriesRank } from "./types";
 import type { Item } from "./store";
 import { pullUp as pullUpList } from "./ansage";
 
@@ -15,11 +14,10 @@ const NO_LIST: ListEntry[] = [];
 const NO_PLAN: Evening[] = [];
 const NO_STALLED: { issueId: number; behind: number }[] = [];
 
-/** The rules a sort goes by, as text: series ranking and every event's order. */
-function rulesKey(ranks: SeriesRank[], events: EventView[]): string {
-  const r = ranks.map((x) => `${x.series_id}${x.whole ? "*" : ""}`).join(",");
+/** The rules a sort goes by, as text: every event's order. */
+function rulesKey(events: EventView[]): string {
   const e = events.map((v) => `${v.event.id}:${v.order.map((i) => i.id).join(",")}`).join(";");
-  return `v1|${r}|${e}`;
+  return `v2|${e}`;
 }
 
 function sameList(a: ListEntry[], b: ListEntry[]): boolean {
@@ -85,12 +83,8 @@ export function useListSync(
       publisher: verlagOf(i.series),
       archive: !!i.ui.archive,
     }));
-    const order = {
-      ranked: data.seriesOrder.map((r) => r.series_id),
-      whole: new Set(data.seriesOrder.filter((r) => r.whole).map((r) => r.series_id)),
-    };
-    const rules: ListRules = { order, startedEvents };
-    const key = rulesKey(data.seriesOrder, events);
+    const rules: ListRules = { startedEvents };
+    const key = rulesKey(events);
     // Changed rules sort the list again; otherwise new issues are only slotted in.
     const readTodayItems = items.filter((i) => i.ui.status === "read" && i.ui.read_on === today);
     const readToday = readTodayItems.length;

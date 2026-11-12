@@ -5,7 +5,7 @@ import type { FoundSeries } from "../components/SeriesSearch";
 //   #plan                      #plan/heft/12
 //   #stapel                    #stapel/serie/4  #stapel/serie/4/alle  #stapel/serie/4/alle/12
 //   #stapel/heft/12            #stapel/heft/12/serie/4  #stapel/heft/12/alle/4
-//   #stapel/eintragen          #stapel/serien-ordnen  #stapel/reihenfolge
+//   #stapel/eintragen          #stapel/reihenfolge
 //   #stapel/jahr/2026          #stapel/jahr/2026/heft/12
 //   #katalog                   #katalog/heft/12
 //   #serien  #serien/wunsch    #serien/events  #serien/events/7
@@ -20,7 +20,6 @@ export type StapelSel =
   | { kind: "all"; id: number; sel?: number }
   | { kind: "issue"; id: number; series?: number; fromAll?: boolean }
   | { kind: "import" }
-  | { kind: "order" }
   | { kind: "list" }
   /** Ansage: tell Claude what to read next. */
   | { kind: "ansage" }
@@ -74,7 +73,6 @@ function parseSerienSel(p: string[]): SerienSel {
 function parseStapelSel(p: string[]): StapelSel {
   const [kind, a, b, c] = p;
   if (kind === "eintragen") return { kind: "import" };
-  if (kind === "serien-ordnen") return { kind: "order" };
   if (kind === "reihenfolge") return { kind: "list" };
   if (kind === "ansage") return { kind: "ansage" };
   const id = num(a);
@@ -138,7 +136,6 @@ function stapelSelPath(s: StapelSel): string[] {
   if (!s) return [];
   switch (s.kind) {
     case "import": return ["eintragen"];
-    case "order": return ["serien-ordnen"];
     case "list": return ["reihenfolge"];
     case "ansage": return ["ansage"];
     case "year": return ["jahr", String(s.year), ...(s.issue !== undefined ? ["heft", String(s.issue)] : [])];

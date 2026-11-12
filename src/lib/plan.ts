@@ -1,8 +1,8 @@
 // Builds the reading plan. Pure: everything it needs comes in as arguments.
 //
 // The plan is a saved reading list, read top to bottom. It is sorted by the
-// rules only when the reader asks for it or changes the rules (series ranking,
-// events); reading an issue never reorders it.
+// rules only when the reader asks for it or changes the rules (events);
+// reading an issue never reorders it.
 //
 // Sort rules:
 // - Old pile first, then everything else.
@@ -11,10 +11,8 @@
 //   series only after an event. An event issue is read in event order even when
 //   earlier issues of its series are still open; the series goes on after it.
 // - Without an event a series is read in blocks of BLOCK_SIZE issues.
-// - The reader can rank series: ranked series take their turn first, in rank
-//   order, the rest by date. Series marked "whole" (above the line) are read
-//   to the end before the others take turns; an event inside one is still read
-//   in one go where the series reaches it. Old pile first still holds.
+// - Series take turns by date: the one whose oldest open issue came out
+//   first goes first, so after a block of it another series comes up.
 // - A started event (one of its issues read) goes first.
 // - Issues moved by hand keep their place.
 //
@@ -50,14 +48,6 @@ export interface PlanIssue {
   archive?: boolean;
 }
 
-/** The reader's series ranking: series ids in order, and those read to the end in one go. */
-export interface SeriesOrder {
-  ranked: number[];
-  whole: Set<number>;
-}
-
-const NO_ORDER: SeriesOrder = { ranked: [], whole: new Set() };
-
 export interface Evening {
   date: string;
   /** pinned: moved to its place in the list by hand. */
@@ -83,11 +73,9 @@ const byNumber = (a: PlanIssue, b: PlanIssue) =>
   a.id - b.id;
 
 /** Orders issues the way they should be read, ignoring dates. */
-export function readingQueue(issues: PlanIssue[], blockSize = BLOCK_SIZE, order: SeriesOrder = NO_ORDER): PlanIssue[] {
+export function readingQueue(issues: PlanIssue[], blockSize = BLOCK_SIZE): PlanIssue[] {
   const remaining = new Map(issues.map((i) => [i.id, i]));
   const members = eventMembers(issues);
-  const rankOf = new Map(order.ranked.map((s, k) => [s, k]));
-  const rank = (s: number) => rankOf.get(s) ?? order.ranked.length;
 
   const out: PlanIssue[] = [];
   const take = (i: PlanIssue) => {
@@ -104,21 +92,12 @@ export function readingQueue(issues: PlanIssue[], blockSize = BLOCK_SIZE, order:
     }
     const firstDate = (list: PlanIssue[]) => list.reduce((m, i) => (i.storeDate && i.storeDate < m ? i.storeDate : m), "9999");
     const rotation = [...bySeries.keys()].sort(
-      (a, b) => rank(a) - rank(b) || firstDate(bySeries.get(a)!).localeCompare(firstDate(bySeries.get(b)!)) || a - b,
+      (a, b) => firstDate(bySeries.get(a)!).localeCompare(firstDate(bySeries.get(b)!)) || a - b,
     );
     const nextOf = (s: number) => bySeries.get(s)!.find((i) => remaining.has(i.id));
     const takeEvent = (eventId: number) => {
       for (const i of members.get(eventId)!) if (remaining.has(i.id)) take(i);
     };
-
-    // Series above the line: each to the end, an event where the series reaches it.
-    for (const seriesId of rotation) {
-      if (!order.whole.has(seriesId)) continue;
-      for (let i = nextOf(seriesId); i; i = nextOf(seriesId)) {
-        if (i.event) takeEvent(i.event.id);
-        else take(i);
-      }
-    }
 
     let idx = 0;
     while (rotation.some((s) => nextOf(s))) {
@@ -164,7 +143,6 @@ export interface ListEntry {
 /** What a full sort goes by. */
 export interface ListRules {
   blockSize?: number;
-  order?: SeriesOrder;
   /** Started events (an issue already read), most urgent first. */
   startedEvents?: number[];
 }
@@ -180,7 +158,7 @@ export function sortList(issues: PlanIssue[], rules: ListRules = {}, keep: ListE
   const members = eventMembers(issues);
   const started = (rules.startedEvents ?? []).flatMap((e) => (members.get(e) ?? []).filter((i) => !fixed.has(i.id)));
   const early = new Set(started.map((i) => i.id));
-  const rest = readingQueue(issues.filter((i) => !fixed.has(i.id) && !early.has(i.id)), rules.blockSize, rules.order);
+  const rest = readingQueue(issues.filter((i) => !fixed.has(i.id) && !early.has(i.id)), rules.blockSize);
   const out: ListEntry[] = [...started, ...rest].map((i) => ({ issueId: i.id, manual: false, added: false }));
   for (const { e, k } of manual) out.splice(Math.min(k, out.length), 0, { issueId: e.issueId, manual: true, added: false });
   return out;

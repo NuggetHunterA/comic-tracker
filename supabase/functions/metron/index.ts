@@ -4,6 +4,7 @@
 // POST {action: "search-series", q}, {action: "sync-series", series_id} or {action: "issue-writer", issue_id} with a user JWT.
 import { createClient } from "npm:@supabase/supabase-js@2.58.0";
 import { CLASSICS, SEASONS, SEASON_TERMS, type Classic } from "../_shared/classics.ts";
+import { writerDue } from "../_shared/writer.ts";
 
 const METRON = "https://metron.cloud/api";
 const MIN_GAP_MS = 3200; // Metron allows 20 requests per minute.
@@ -182,22 +183,30 @@ async function syncWriter(issueId: number): Promise<string | null> {
   return writer;
 }
 
-// A few pile issues per run, so most details already know their writer.
+// A few pile issues per run, so most details already know their writer. Metron often credits the
+// writer only around release, so empty answers are asked again on release day and weekly after.
 async function syncPileWriters(log: string[]) {
   const { data: open } = await db.from("user_issues").select("issue_id").eq("status", "pile");
   const ids = [...new Set((open ?? []).map((u) => u.issue_id))];
   if (!ids.length) return;
-  const todo: number[] = [];
-  for (let i = 0; i < ids.length && todo.length < WRITERS_PER_RUN; i += 150) {
-    const { data } = await db.from("issues").select("id").in("id", ids.slice(i, i + 150)).is("writer_synced_at", null);
-    todo.push(...(data ?? []).map((r) => r.id));
+  const due: { id: number; writer_synced_at: string | null; store_date: string | null }[] = [];
+  for (let i = 0; i < ids.length; i += 150) {
+    const { data, error } = await db.from("issues").select("id, writer, writer_synced_at, store_date")
+      .in("id", ids.slice(i, i + 150)).is("writer", null);
+    if (error) throw error;
+    due.push(...(data ?? []).filter((r) => writerDue(r)));
   }
+  // Never asked first, then the issues closest to today.
+  const today = Date.now();
+  const distance = (d: string | null) => (d ? Math.abs(Date.parse(d) - today) : Infinity);
+  due.sort((a, b) => Number(!!a.writer_synced_at) - Number(!!b.writer_synced_at) || distance(a.store_date) - distance(b.store_date));
   let n = 0;
-  for (const id of todo.slice(0, WRITERS_PER_RUN)) {
-    await syncWriter(id);
+  let found = 0;
+  for (const r of due.slice(0, WRITERS_PER_RUN)) {
+    if (await syncWriter(r.id)) found++;
     n++;
   }
-  if (n) log.push(`writers: ${n}`);
+  if (n) log.push(`writers: ${found} of ${n}`);
 }
 
 async function cron(): Promise<string> {

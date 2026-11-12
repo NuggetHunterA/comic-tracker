@@ -19,6 +19,7 @@ import { webtoonHref } from "../lib/webtoonLink";
 import { defaultFormatOf, isSub, subFormatOf } from "../lib/publisher";
 import { EVENT_COLORS, defaultShort, eventHex } from "../lib/events";
 import { openEvent, openRun } from "../lib/nav";
+import { writerDue } from "../../supabase/functions/_shared/writer";
 
 
 type Props = { issueId: number; onClose?: () => void };
@@ -291,16 +292,16 @@ function PlanLine({ issueId, plan, today }: { issueId: number; plan: { date: str
 // Writers already looked up, so reopening a detail does not ask again.
 const writers = new Map<number, string | null>();
 
-/** The issue's writer, one name only; asks Metron the first time the issue is opened. */
+/** The issue's writer, one name only; asks Metron when it is due (first open, release day, then weekly). */
 function WriterLine({ issueId }: { issueId: number }) {
   const [writer, setWriter] = useState(() => writers.get(issueId) ?? null);
   useEffect(() => {
     if (writers.has(issueId)) return;
     let stale = false;
     (async () => {
-      const { data } = await supabase.from("issues").select("writer, writer_synced_at").eq("id", issueId).maybeSingle();
+      const { data } = await supabase.from("issues").select("writer, writer_synced_at, store_date").eq("id", issueId).maybeSingle();
       let name: string | null = data?.writer ?? null;
-      if (data && !data.writer_synced_at) name = (await metron<{ writer: string | null }>({ action: "issue-writer", issue_id: issueId })).writer;
+      if (data && writerDue(data)) name = (await metron<{ writer: string | null }>({ action: "issue-writer", issue_id: issueId })).writer;
       writers.set(issueId, name);
       if (!stale) setWriter(name);
     })().catch(() => {

@@ -322,6 +322,26 @@ describe("syncList", () => {
     expect(ids(syncList(list, [...issues, issue(3, 30, 1)]))).toEqual([1, 2, 3]);
     expect(ids(syncList(list, [...issues, issue(3, 30, 1, { oldPile: true })]))).toEqual([1, 3, 2]);
   });
+
+  it("puts a new series where the evenings read it, not below issues read later", () => {
+    // 1 and 2 readable now, 3 and 4 only in December; the new series #9 from 2026-11-05.
+    const issues = [
+      issue(1, 10, 1), issue(2, 20, 1),
+      issue(3, 30, 1, { readableFrom: "2026-12-10" }), issue(4, 40, 1, { readableFrom: "2026-12-20" }),
+    ];
+    const list = [1, 2, 3, 4].map((issueId) => ({ issueId, manual: false, added: false }));
+    const fresh = [...issues, issue(9, 90, 1, { readableFrom: "2026-11-05" })];
+    const read = (l: ListEntry[]) => planEvenings({ list: l, issues: fresh, today: TODAY, maxPerEvening: 3 });
+    const after = syncList(list, fresh, {}, read);
+    expect(ids(after)).toEqual([1, 2, 9, 3, 4]);
+    expect(after[2]).toEqual({ issueId: 9, manual: false, added: true });
+    // The list reads top to bottom the way the evenings do.
+    expect(read(after).flatMap((e) => e.entries.map((x) => x.issueId))).toEqual(ids(after));
+    // Not readable yet at all: stays at the end.
+    const undated = [...issues, issue(9, 90, 1, { readableFrom: null })];
+    const readUndated = (l: ListEntry[]) => planEvenings({ list: l, issues: undated, today: TODAY, maxPerEvening: 3 });
+    expect(ids(syncList(list, undated, {}, readUndated))).toEqual([1, 2, 3, 4, 9]);
+  });
 });
 
 describe("releaseInList", () => {

@@ -168,14 +168,48 @@ export function sortList(issues: PlanIssue[], rules: ListRules = {}, keep: ListE
  * Brings the saved list up to date without moving what is already in it:
  * issues no longer open drop out, new ones are slotted in (see slotFor).
  * An empty list is sorted from scratch.
+ *
+ * A new issue with nothing of its series or event in the list has no
+ * neighbour to go next to. Given the evenings (read), it goes where the plan
+ * reads it, right after the issue read before it; otherwise at the end.
  */
-export function syncList(stored: ListEntry[], issues: PlanIssue[], rules: ListRules = {}): ListEntry[] {
+export function syncList(
+  stored: ListEntry[],
+  issues: PlanIssue[],
+  rules: ListRules = {},
+  read?: (list: ListEntry[]) => Evening[],
+): ListEntry[] {
   const byId = new Map(issues.map((i) => [i.id, i]));
   const out = stored.filter((e) => byId.has(e.issueId));
   if (out.length === 0) return sortList(issues, rules);
   const listed = new Set(out.map((e) => e.issueId));
+  const loose: number[] = [];
   for (const i of issues.filter((x) => !listed.has(x.id)).sort(byNumber)) {
+    const lone = !out.some((e) => {
+      const x = byId.get(e.issueId)!;
+      return x.seriesId === i.seriesId || (i.event !== null && x.event?.id === i.event.id);
+    });
     out.splice(slotFor(out, i, byId), 0, { issueId: i.id, manual: false, added: true });
+    if (lone) loose.push(i.id);
+  }
+  return read && loose.length ? placeByEvening(out, loose, read(out)) : out;
+}
+
+/**
+ * Moves these entries to where the evenings read them: right after the issue
+ * read just before, or to the top when they are read first. Entries no
+ * evening takes stay where they are.
+ */
+function placeByEvening(list: ListEntry[], ids: number[], evenings: Evening[]): ListEntry[] {
+  const order = evenings.flatMap((ev) => ev.entries.map((x) => x.issueId));
+  const move = new Set(ids);
+  let out = list;
+  for (const id of order.filter((x) => move.has(x))) {
+    const entry = out.find((e) => e.issueId === id)!;
+    out = out.filter((e) => e.issueId !== id);
+    const before = order.indexOf(id) - 1;
+    const at = before < 0 ? 0 : out.findIndex((e) => e.issueId === order[before]) + 1;
+    out.splice(at, 0, entry);
   }
   return out;
 }

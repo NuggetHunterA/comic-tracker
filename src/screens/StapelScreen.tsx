@@ -66,6 +66,15 @@ export function StapelList({ wide, sel, onSelect }: { wide: boolean; sel: Stapel
     <>
       <div className="titlerow">
         <h1 style={{ fontSize: wide ? 48 : 52 }}>{bilanz ? "Bilanz" : "Stapel"}</h1>
+        {!bilanz && (
+          <button type="button" className={`ansagebtn ${sel?.kind === "ansage" ? "on" : ""}`} aria-current={sel?.kind === "ansage" ? "true" : undefined}
+            onClick={() => onSelect({ kind: "ansage" })}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="square" aria-hidden="true">
+              <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8" />
+            </svg>
+            Ansage
+          </button>
+        )}
         <button type="button" className={`iconbtn statbtn ${bilanz ? "on" : ""}`} aria-pressed={bilanz} aria-label="Bilanz: was du gelesen hast"
           title="Bilanz" onClick={() => setBilanz(!bilanz)}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" aria-hidden="true">

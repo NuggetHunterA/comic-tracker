@@ -58,6 +58,12 @@ interface Store {
   moveTo: (issueId: number, index: number) => Promise<void>;
   /** Hands one issue moved by hand back to the rules, or all of them (a full sort). */
   release: (issueId?: number) => Promise<void>;
+  /** Ansage: the evenings with these issues on top, without saving. */
+  previewUp: (issueIds: number[]) => Evening[];
+  /** Ansage: puts these issues on top (moved by hand); resolves to the list before. */
+  pullUp: (issueIds: number[]) => Promise<ListEntry[]>;
+  /** Ansage undo: puts a list back. */
+  restoreList: (list: ListEntry[]) => Promise<void>;
   events: EventView[];
   eventOf: Map<number, EventMark>;
   /** Series held up by an issue without a reading date, and how many issues wait behind it. */
@@ -248,11 +254,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return { events: views, eventOf: marks };
   }, [data]);
 
-  const { plan, list, stalled, resort, moveTo, release } = useListSync(data, setData, setError, items, today, events, eventOf, offline !== null);
+  const { plan, list, stalled, resort, moveTo, release, previewUp, pullUp, restoreList } = useListSync(data, setData, setError, items, today, events, eventOf, offline !== null);
 
   const value = useMemo(
-    () => ({ data, error, offline, queued, backOnline, markRead, rate, takeBack, today, items, plan, list, resort, moveTo, release, events, eventOf, stalled, reload, remember }),
-    [data, error, offline, queued, backOnline, markRead, rate, takeBack, today, items, plan, list, resort, moveTo, release, events, eventOf, stalled, reload, remember],
+    () => ({ data, error, offline, queued, backOnline, markRead, rate, takeBack, today, items, plan, list, resort, moveTo, release, previewUp, pullUp, restoreList, events, eventOf, stalled, reload, remember }),
+    [data, error, offline, queued, backOnline, markRead, rate, takeBack, today, items, plan, list, resort, moveTo, release, previewUp, pullUp, restoreList, events, eventOf, stalled, reload, remember],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

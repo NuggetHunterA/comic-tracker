@@ -20,6 +20,8 @@ import { ErrorNote } from "./components/ErrorNote";
 import { explain } from "./lib/errors";
 import { UndoProvider } from "./lib/undo";
 import { UndoStrip } from "./components/UndoStrip";
+import { AnsageStrip } from "./components/AnsageStrip";
+import { Ansage } from "./components/Ansage";
 import { backTo, navigate, onRouteChange, replaceRoute, parseRoute, type Route, type SerienSel, type SerienTab, type StapelSel } from "./lib/route";
 import { OfflineStrip } from "./components/OfflineStrip";
 import { EventFinale } from "./components/EventFinale";
@@ -132,6 +134,7 @@ function Shell() {
     const s = stapelSel;
     const body =
       s?.kind === "import" ? <ImportForm onDone={closeStapel} /> :
+      s?.kind === "ansage" ? <Ansage onDone={() => backTo({ tab: "stapel", sel: null })} /> :
       s?.kind === "order" ? <SeriesOrder /> :
       s?.kind === "list" ? <IssueOrder /> :
       s?.kind === "series" ? <StapelSeries seriesId={s.id} onSelect={setStapelSel} /> :
@@ -190,6 +193,7 @@ function Shell() {
         {data && detail}
       </div>
       {data && <UndoStrip />}
+      {data && <AnsageStrip />}
       {data && <EventFinale />}
       {data && <InfiniteDrop />}
     </div>

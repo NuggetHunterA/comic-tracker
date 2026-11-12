@@ -31,58 +31,103 @@ const ERRORS: Record<string, string> = {
   network: "Die Spracherkennung braucht Netz. Prüf die Verbindung, oder tipp deinen Wunsch.",
 };
 
+/** Longest a wish may run; then it is sent as if "Fertig" was tapped. */
+const MAX_MS = 60_000;
+
 /**
- * listen() starts, stop() ends; `text` grows while Adrian speaks, `done` fires
- * once with the final words when the recognizer stops.
+ * listen() starts, stop() ("Fertig") ends; `text` grows while Adrian speaks,
+ * `done` fires once with all the words. Pauses do not end it: when the
+ * recognizer stops on its own after a silence, it is started again and the
+ * new words are added to the old ones.
  */
 export function useSpeech(done: (text: string) => void) {
   const [listening, setListening] = useState(false);
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const rec = useRef<Recognition | null>(null);
-  const latest = useRef("");
+  /** Words of earlier rounds (before the recognizer restarted), and of the current one. */
+  const kept = useRef("");
+  const current = useRef("");
+  /** Set by "Fertig": the next end sends the words instead of listening on. */
+  const finishing = useRef(false);
+  const timer = useRef<number | undefined>(undefined);
   const onDone = useRef(done);
   onDone.current = done;
 
-  useEffect(() => () => rec.current?.abort(), []);
+  const all = () => [kept.current, current.current].map((x) => x.trim()).filter(Boolean).join(" ");
 
-  const listen = useCallback(() => {
+  useEffect(() => () => {
+    finishing.current = false;
+    window.clearTimeout(timer.current);
+    const r = rec.current;
+    rec.current = null;
+    r?.abort();
+  }, []);
+
+  const round = useCallback(() => {
     const C = ctor();
     if (!C) return;
-    rec.current?.abort();
     const r = new C();
     r.lang = "de-DE";
     r.interimResults = true;
-    r.continuous = false;
-    latest.current = "";
+    r.continuous = true;
+    current.current = "";
     let failed = false;
     r.onresult = (e) => {
-      const words = Array.from(e.results).map((x) => x[0]?.transcript ?? "").join("");
-      latest.current = words;
-      setText(words);
+      current.current = Array.from(e.results).map((x) => x[0]?.transcript ?? "").join("");
+      setText(all());
     };
     r.onerror = (e) => {
-      if (e.error === "aborted") return;
+      // Silence or an abort is not a failure; the round simply ends.
+      if (e.error === "aborted" || e.error === "no-speech") return;
       failed = true;
       setError(ERRORS[e.error] ?? "Die Spracherkennung hat nicht geklappt. Versuch es nochmal oder tipp deinen Wunsch.");
     };
     r.onend = () => {
-      setListening(false);
+      if (rec.current !== r) return;
+      kept.current = all();
+      current.current = "";
+      if (!failed && !finishing.current) {
+        // Stopped by itself after a pause: listen on.
+        round();
+        return;
+      }
       rec.current = null;
-      const said = latest.current.trim();
+      window.clearTimeout(timer.current);
+      setListening(false);
+      const said = kept.current;
       if (!failed && said) onDone.current(said);
     };
     rec.current = r;
-    setText("");
-    setError(null);
-    setListening(true);
     r.start();
   }, []);
 
-  const stop = useCallback(() => rec.current?.stop(), []);
+  const listen = useCallback(() => {
+    if (!ctor()) return;
+    const old = rec.current;
+    rec.current = null;
+    old?.abort();
+    kept.current = "";
+    current.current = "";
+    finishing.current = false;
+    setText("");
+    setError(null);
+    setListening(true);
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => { finishing.current = true; rec.current?.stop(); }, MAX_MS);
+    round();
+  }, [round]);
+
+  const stop = useCallback(() => {
+    finishing.current = true;
+    rec.current?.stop();
+  }, []);
   const cancel = useCallback(() => {
-    latest.current = "";
-    rec.current?.abort();
+    finishing.current = false;
+    window.clearTimeout(timer.current);
+    const r = rec.current;
+    rec.current = null;
+    r?.abort();
     setListening(false);
   }, []);
 

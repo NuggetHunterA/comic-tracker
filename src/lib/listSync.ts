@@ -85,7 +85,6 @@ export function useListSync(
     }));
     const rules: ListRules = { startedEvents };
     const key = rulesKey(events);
-    // Changed rules sort the list again; otherwise new issues are only slotted in.
     const readTodayItems = items.filter((i) => i.ui.status === "read" && i.ui.read_on === today);
     const readToday = readTodayItems.length;
     // Tonight keeps to the publisher already read today.
@@ -98,7 +97,8 @@ export function useListSync(
       const l = sortList(planIssues, rules, prev);
       return alignToEvenings(l, evenings(l));
     };
-    const list = data.listRules === key ? syncList(data.readingList, planIssues, rules) : sorted(data.readingList);
+    // Changed rules sort the list again; otherwise new issues are only slotted in.
+    const list = data.listRules === key ? syncList(data.readingList, planIssues, rules, evenings) : sorted(data.readingList);
     return {
       key,
       rules,

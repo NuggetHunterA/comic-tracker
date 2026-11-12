@@ -34,8 +34,6 @@ export function Cover({ issue, readable = true, showNumber = true, tape, big, st
   const bg: CSSProperties = {
     backgroundColor: seriesColor(issue.series_id),
     backgroundImage: issue.cover_url ? `url("${issue.cover_url}")` : undefined,
-    // The same image for the night negative, which a pseudo-element draws (lib/nachtdruck.ts).
-    ...(issue.cover_url && !readable ? { "--art": `url("${issue.cover_url}")` } : {}),
     ...style,
   };
   return (

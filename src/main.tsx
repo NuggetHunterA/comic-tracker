@@ -2,9 +2,6 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import "./styles.css";
-import { applyInitialPrint } from "./lib/nachtdruck";
-
-applyInitialPrint();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

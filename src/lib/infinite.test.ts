@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bookSlug, connectBooks, normalizeSeriesUrl, ogImage, onSaleDate, openHref, pickBook, pickSeries, searchUrl, slugify } from "../../supabase/functions/_shared/infinite";
+import { bookSlug, connectBooks, findOnSeriesPages, normalizeSeriesUrl, ogImage, onSaleDate, openHref, pickBook, pickSeries, searchUrl, slugify } from "../../supabase/functions/_shared/infinite";
 
 // Excerpt in the shape of Infinite's series page for Batman (2011-2016).
 const seriesPage = `
@@ -13,6 +13,11 @@ describe("Infinite slugs", () => {
     expect(slugify("Batman/Shadow")).toBe("batmanshadow");
     expect(slugify("Batman '89")).toBe("batman-89");
     expect(slugify("World's Finest Comics")).toBe("worlds-finest-comics");
+  });
+  it("drops dots like Infinite does, e.g. DC K.O.", () => {
+    expect(bookSlug("DC K.O.", 2025, "1")).toBe("dc-ko-2025-1");
+    expect(slugify("Mr. Freeze")).toBe("mr-freeze");
+    expect(slugify("Batman 1.5")).toBe("batman-1-5");
   });
   it("builds the issue slug from name, start year and number", () => {
     expect(bookSlug("Batman", 2011, "52")).toBe("batman-2011-52");
@@ -29,6 +34,37 @@ describe("pickBook", () => {
   });
   it("accepts a volume year that differs from Metron's", () => {
     expect(pickBook(seriesPage, "Batman", 2012, "52")).toContain("/batman-2011-52/");
+  });
+});
+
+describe("findOnSeriesPages", () => {
+  // A series with `total` issues, newest first; page N lists the newest N*20, pages past the end fail.
+  const series = (total: number) => {
+    const asked: number[] = [];
+    const fetchPage = async (n: number) => {
+      asked.push(n);
+      if ((n - 1) * 20 >= total) return "";
+      const shown = Math.min(n * 20, total);
+      return Array.from({ length: shown }, (_, i) => {
+        const nr = total - i;
+        return `<a href="/comics/book/absolute-batman-2024-${nr}/00000000-0000-4000-8000-${String(nr).padStart(12, "0")}/c">`;
+      }).join("");
+    };
+    return { asked, fetchPage };
+  };
+  it("finds an old issue on the last page, though the page after it fails", async () => {
+    const s = series(27);
+    expect(await findOnSeriesPages(s.fetchPage, "Absolute Batman", 2024, "1")).toContain("/absolute-batman-2024-1/");
+    expect(s.asked).toEqual([1, 2]);
+  });
+  it("backs off to the pages between after overshooting", async () => {
+    const s = series(100);
+    expect(await findOnSeriesPages(s.fetchPage, "Absolute Batman", 2024, "3")).toContain("/absolute-batman-2024-3/");
+    expect(s.asked).toEqual([1, 2, 4, 8, 6, 5]);
+  });
+  it("gives up when the whole series is shown without the issue", async () => {
+    expect(await findOnSeriesPages(series(27).fetchPage, "Absolute Batman", 2024, "30")).toBeNull();
+    expect(await findOnSeriesPages(series(40).fetchPage, "Absolute Batman", 2024, "41")).toBeNull();
   });
 });
 
@@ -56,10 +92,15 @@ describe("links", () => {
   it("searches for series and number", () => {
     expect(searchUrl("Absolute Batman", "12")).toBe("https://www.dcuniverseinfinite.com/search?q=Absolute%20Batman%20%2312&group=comics");
   });
-  it("hands issue pages to the app on Android, searches stay in the browser", () => {
+  it("hands issue pages to the app on Android, searches to Chrome so the app cannot grab them", () => {
     const u = "https://www.dcuniverseinfinite.com/comics/book/batman-2011-52/bae9d698-f6cf-43b0-98ae-7b5ce5acfd34";
     expect(openHref(u, false)).toBe(u);
-    expect(openHref(searchUrl("Batman", "1"), true)).toBe(searchUrl("Batman", "1"));
+    expect(openHref(searchUrl("Batman", "1"), false)).toBe(searchUrl("Batman", "1"));
+    const search = searchUrl("Batman", "1");
+    expect(openHref(search, true)).toBe(
+      `intent://www.dcuniverseinfinite.com/search?q=Batman%20%231&group=comics#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(search)};end`,
+    );
+    expect(openHref("https://example.com/x", true)).toBe("https://example.com/x");
     expect(openHref(u, true)).toBe(
       `intent://www.dcuniverseinfinite.com/comics/book/batman-2011-52/bae9d698-f6cf-43b0-98ae-7b5ce5acfd34#Intent;scheme=https;package=com.wb.goog.dcuniverse;S.browser_fallback_url=${encodeURIComponent(u)};end`,
     );

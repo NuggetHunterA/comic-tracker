@@ -5,12 +5,16 @@
 export const INFINITE_ORIGIN = "https://www.dcuniverseinfinite.com";
 export const INFINITE_PACKAGE = "com.wb.goog.dcuniverse";
 
-/** Infinite's slugs drop apostrophes and slashes and turn every other gap into a hyphen. */
+/**
+ * Infinite's slugs drop apostrophes, slashes and dots ("DC K.O." → "dc-ko") and turn every other
+ * gap into a hyphen. A dot between digits stays a gap, as in "1.5".
+ */
 export function slugify(s: string): string {
   return s
     .toLowerCase()
     .replace(/½/g, "12")
     .replace(/['’/]/g, "")
+    .replace(/(?<!\d)\.|\.(?!\d)/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
@@ -30,6 +34,39 @@ function links(html: string, re: RegExp): { slug: string; url: string }[] {
     if (!seen.has(url)) seen.set(url, m[1]);
   }
   return [...seen].map(([url, slug]) => ({ slug, url }));
+}
+
+/**
+ * Walks a series page for the issue. Page N lists the newest N*20 issues (it repeats pages 1 to
+ * N-1), and a page past the end answers with an error, which `fetchPage` returns as "". So double
+ * N until the issue turns up, the list is complete, or a page fails; after a failure, halve the
+ * gap to the last page that worked, because the issue may sit on a page in between.
+ */
+export async function findOnSeriesPages(
+  fetchPage: (page: number) => Promise<string>,
+  name: string,
+  yearBegan: number | null,
+  number: string,
+  maxPage = 64,
+): Promise<string | null> {
+  let good = 0; // highest page that answered, with fewer issues than the issue could need
+  let bad = maxPage + 1; // lowest page that failed
+  let n = 1;
+  while (n > good && n < bad) {
+    const html = await fetchPage(n);
+    if (!html) {
+      bad = n;
+    } else {
+      const hit = pickBook(html, name, yearBegan, number);
+      if (hit) return hit;
+      const count = new Set(html.match(/\/comics\/book\/[a-z0-9-]+\/[0-9a-f-]{36}/g) ?? []).size;
+      if (count < n * 20) return null; // the whole series is on this page
+      good = n;
+    }
+    n = bad > maxPage ? Math.min(n * 2, maxPage) : Math.floor((good + bad) / 2);
+    if (n === good && bad > maxPage) break; // reached maxPage
+  }
+  return null;
 }
 
 /** Finds the issue among the book links of a series page or search result. */
@@ -65,15 +102,19 @@ export function searchUrl(name: string, number: string): string {
   return `${INFINITE_ORIGIN}/search?q=${encodeURIComponent(`${name} #${number}`)}&group=comics`;
 }
 
+export const CHROME_PACKAGE = "com.android.chrome";
+
 /**
  * On Android, an intent link hands an issue page straight to the Infinite app instead of letting
- * the browser decide; without the app it opens the web page. Searches stay in the browser,
- * because the app crashes on search links.
+ * the browser decide; without the app it opens the web page. Every other Infinite page (search,
+ * home) goes to Chrome by name: the app claims the whole domain, so a plain link would land in
+ * the app too, and the app crashes on anything but an issue page.
  */
 export function openHref(url: string, android: boolean): string {
-  if (!android || !url.startsWith(`${INFINITE_ORIGIN}/comics/book/`)) return url;
+  if (!android || !url.startsWith(INFINITE_ORIGIN)) return url;
   const rest = url.slice("https://".length);
-  return `intent://${rest}#Intent;scheme=https;package=${INFINITE_PACKAGE};S.browser_fallback_url=${encodeURIComponent(url)};end`;
+  const app = url.startsWith(`${INFINITE_ORIGIN}/comics/book/`) ? INFINITE_PACKAGE : CHROME_PACKAGE;
+  return `intent://${rest}#Intent;scheme=https;package=${app};S.browser_fallback_url=${encodeURIComponent(url)};end`;
 }
 
 // DC Connect, DC's monthly catalog: one series page on Infinite, on-sale dates on dc.com.

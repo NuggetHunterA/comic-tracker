@@ -32,3 +32,11 @@ describe("Marvel Comics app links", () => {
     );
   });
 });
+
+describe("found issue pages", () => {
+  it("open the issue instead of the search", () => {
+    const issue = { id: 1, number: "1000" } as Issue;
+    const series = { id: 1, name: "The Amazing Spider-Man" } as Series;
+    expect(webtoonHref(issue, series, false, issueUrl(36882))).toBe("https://www.marvelcomicsapp.com/issues/36882");
+  });
+});

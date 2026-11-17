@@ -17,6 +17,13 @@ export async function metron<T>(body: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 
+/** Calls the marvel edge function, which finds issue pages in the Marvel Comics app. */
+export async function marvel<T>(body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke("marvel", { body });
+  if (error) throw error;
+  return data as T;
+}
+
 /** Calls the infinite edge function, which finds issue pages on DC Universe Infinite. */
 export async function infinite<T>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke("infinite", { body });

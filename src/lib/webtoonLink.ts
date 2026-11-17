@@ -1,3 +1,6 @@
+import { useEffect, useState } from "react";
+import { MARVEL_ORIGIN, issuePage } from "../../supabase/functions/_shared/marvel";
+import { marvel } from "./supabase";
 import type { Issue, Series } from "./types";
 
 /**
@@ -5,12 +8,10 @@ import type { Issue, Series } from "./types";
  * marvel.webtoon.com (that domain only answers "access denied"). Every page shows the comic
  * in the browser with a "Continue in the app" button.
  */
-export const WEBTOON_ORIGIN = "https://www.marvelcomicsapp.com";
+export const WEBTOON_ORIGIN = MARVEL_ORIGIN;
 
 /** An issue page, e.g. /issues/36882 for The Amazing Spider-Man (2025) #1000. */
-export function issueUrl(id: number | string): string {
-  return `${WEBTOON_ORIGIN}/issues/${id}`;
-}
+export const issueUrl = issuePage;
 
 /**
  * The app's search ("Explore") for a series. Only the series name: the search finds series by
@@ -35,9 +36,40 @@ export function openInApp(url: string, android: boolean): string {
 }
 
 const android = typeof navigator !== "undefined" && /android/i.test(navigator.userAgent);
+const found = new Map<number, string | null>();
 
-/** Where "In Webtoon öffnen" leads: the app's search for the issue's series, in the app on Android. */
-export function webtoonHref(issue: Issue | undefined, series: Series | undefined, onAndroid = android): string {
-  const url = issue && series ? exploreUrl(series.name) : `${WEBTOON_ORIGIN}/explore`;
+/** Where "In Webtoon öffnen" leads without a known issue page: the app's search for the series. */
+export function webtoonHref(issue: Issue | undefined, series: Series | undefined, onAndroid = android, page: string | null = null): string {
+  const url = page ?? (issue && series ? exploreUrl(series.name) : `${WEBTOON_ORIGIN}/explore`);
   return openInApp(url, onAndroid);
+}
+
+/**
+ * Where "In Webtoon öffnen" leads: the issue page once the marvel function found it, the
+ * Explore search for the series until then (or when the lookup fails), handed to the app on Android.
+ */
+export function useWebtoonHref(issue: Issue | undefined, series: Series | undefined, enabled: boolean): string {
+  const id = issue?.id;
+  const [url, setUrl] = useState<string | null>(id !== undefined ? found.get(id) ?? null : null);
+  useEffect(() => {
+    if (!enabled || id === undefined) return;
+    if (found.has(id)) {
+      setUrl(found.get(id) ?? null);
+      return;
+    }
+    let live = true;
+    setUrl(null);
+    marvel<{ url: string | null }>({ action: "issue", issue_id: id })
+      .then((r) => {
+        found.set(id, r.url);
+        if (live) setUrl(r.url);
+      })
+      .catch(() => {
+        // Not deployed or the Marvel search refused: the Explore search still works.
+      });
+    return () => {
+      live = false;
+    };
+  }, [id, enabled]);
+  return webtoonHref(issue, series, android, url);
 }

@@ -15,7 +15,7 @@ import { useUndo } from "../lib/undo";
 import { RIP_MS, ripCover } from "../lib/rip";
 import { flyToPile, pressStamp, thud } from "../lib/motion";
 import { useInfiniteHref } from "../lib/infiniteLink";
-import { webtoonHref } from "../lib/webtoonLink";
+import { useWebtoonHref } from "../lib/webtoonLink";
 import { defaultFormatOf, isSub, subFormatOf } from "../lib/publisher";
 import { EVENT_COLORS, defaultShort, eventHex } from "../lib/events";
 import { openEvent, openRun } from "../lib/nav";
@@ -80,6 +80,7 @@ function IssueDetailBody({ issueId, onClose }: Props) {
   // Look the issue page up only once it is out on Infinite; before that there is nothing to find.
   const unlocked = !!data && !!issue && !!sub && (readableFrom(issue.store_date, sub, null, ...delays) ?? "9999") <= today;
   const infiniteHref = useInfiniteHref(issue, series, ui?.format === "infinite" && ui.status !== "read" && unlocked);
+  const webtoonHref = useWebtoonHref(issue, series, ui?.format === "webtoon" && ui.status !== "read" && unlocked);
   if (!data) return null;
   if (!issue) return <p className="mut">Heft nicht gefunden.</p>;
   const title = issueTitle(issue, series);
@@ -133,7 +134,7 @@ function IssueDetailBody({ issueId, onClose }: Props) {
     else if (!isSub(ui.format) && !ui.bought_on) go = { label: "Gekauft", onClick: () => run(() => actions.setBought(issueId, today)) };
     else if (from) wait = `AB ${shortDate(from)}`;
     if (ui.format === "infinite" && readable) cand.push({ icon: "out", label: "Infinite", title: "In Infinite öffnen", href: infiniteHref });
-    if (ui.format === "webtoon" && readable) cand.push({ icon: "out", label: "Webtoon", title: "In Webtoon öffnen", href: webtoonHref(issue, series) });
+    if (ui.format === "webtoon" && readable) cand.push({ icon: "out", label: "Webtoon", title: "In Webtoon öffnen", href: webtoonHref });
     if (readable && !ui.skip_plan) {
       const tomorrow = { icon: "next" as const, label: "Morgen", title: "Auf morgen", onClick: () => run(() => moveTo(issueId, afterTonight(plan, list, today, issueId))) };
       if (isTonight(plan, today, issueId)) cand.push(tomorrow);

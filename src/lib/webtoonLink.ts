@@ -1,14 +1,27 @@
 import type { Issue, Series } from "./types";
 
-/** The Marvel app on Webtoon, out on 16 Nov 2026. Its issue links are not known yet. */
-export const WEBTOON_ORIGIN = "https://marvel.webtoon.com";
+/**
+ * The Marvel Comics app by WEBTOON, out on 16 Nov 2026. Its web pages live here, not on
+ * marvel.webtoon.com (that domain only answers "access denied"). Every page shows the comic
+ * in the browser with a "Continue in the app" button.
+ */
+export const WEBTOON_ORIGIN = "https://www.marvelcomicsapp.com";
+
+/** An issue page, e.g. /issues/36882 for The Amazing Spider-Man (2025) #1000. */
+export function issueUrl(id: number | string): string {
+  return `${WEBTOON_ORIGIN}/issues/${id}`;
+}
 
 /**
- * Where "In Webtoon öffnen" leads: the app's search for series and number. A plain https
- * link, so on Android the Marvel app takes it over once it claims its links.
- * TODO after launch: link straight to the issue page.
+ * The app's search ("Explore") for a series. Only the series name: the search finds series by
+ * name, and the issue is one tap away on the series.
  */
+export function exploreUrl(seriesName: string): string {
+  return `${WEBTOON_ORIGIN}/explore?q=${encodeURIComponent(seriesName)}`;
+}
+
+/** Where "In Webtoon öffnen" leads: the app's search for the issue's series. */
 export function webtoonHref(issue: Issue | undefined, series: Series | undefined): string {
-  if (!issue || !series) return WEBTOON_ORIGIN;
-  return `${WEBTOON_ORIGIN}/search?keyword=${encodeURIComponent(`${series.name} ${issue.number}`)}`;
+  if (!issue || !series) return `${WEBTOON_ORIGIN}/explore`;
+  return exploreUrl(series.name);
 }

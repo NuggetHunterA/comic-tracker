@@ -23,7 +23,7 @@ describe("Marvel Comics app links", () => {
     const url = issueUrl(36882);
     expect(openInApp(url, false)).toBe(url);
     expect(openInApp(url, true)).toBe(
-      "intent://www.marvelcomicsapp.com/issues/36882#Intent;scheme=https;package=com.webtoon.marvelcomics;" +
+      "intent://issueHome?issueId=36882#Intent;scheme=marvelcomicsapp;package=com.webtoon.marvelcomics;" +
         `S.browser_fallback_url=${encodeURIComponent(url)};end`,
     );
     expect(webtoonHref({ id: 1, number: "1" } as Issue, { id: 1, name: "Thor" } as Series, true)).toBe(

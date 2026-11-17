@@ -24,15 +24,22 @@ export function exploreUrl(seriesName: string): string {
 /** The Marvel Comics app on Google Play. */
 export const MARVEL_PACKAGE = "com.webtoon.marvelcomics";
 
+/** The app's own link scheme, as the website's "Continue in the app" button builds it. */
+export const MARVEL_SCHEME = "marvelcomicsapp";
+
 /**
- * On Android, an intent link hands the page to the Marvel Comics app by name, so it opens in the
- * app instead of a browser tab. If the app is missing or does not take that page, Android opens
- * the web page instead.
+ * On Android, an intent link hands the page to the Marvel Comics app by name. An issue page opens
+ * the app's own issue screen (marvelcomicsapp://issueHome?issueId=…), since the app does not take
+ * https links; anything else is offered to the app as https. Without the app, Android opens the
+ * web page instead.
  */
 export function openInApp(url: string, android: boolean): string {
   if (!android || !url.startsWith(WEBTOON_ORIGIN)) return url;
+  const fallback = `S.browser_fallback_url=${encodeURIComponent(url)}`;
+  const issue = url.match(/^https:\/\/www\.marvelcomicsapp\.com\/issues\/(\d+)(?:[?#]|$)/);
+  if (issue) return `intent://issueHome?issueId=${issue[1]}#Intent;scheme=${MARVEL_SCHEME};package=${MARVEL_PACKAGE};${fallback};end`;
   const rest = url.slice("https://".length);
-  return `intent://${rest}#Intent;scheme=https;package=${MARVEL_PACKAGE};S.browser_fallback_url=${encodeURIComponent(url)};end`;
+  return `intent://${rest}#Intent;scheme=https;package=${MARVEL_PACKAGE};${fallback};end`;
 }
 
 const android = typeof navigator !== "undefined" && /android/i.test(navigator.userAgent);

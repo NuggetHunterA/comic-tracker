@@ -20,8 +20,24 @@ export function exploreUrl(seriesName: string): string {
   return `${WEBTOON_ORIGIN}/explore?q=${encodeURIComponent(seriesName)}`;
 }
 
-/** Where "In Webtoon öffnen" leads: the app's search for the issue's series. */
-export function webtoonHref(issue: Issue | undefined, series: Series | undefined): string {
-  if (!issue || !series) return `${WEBTOON_ORIGIN}/explore`;
-  return exploreUrl(series.name);
+/** The Marvel Comics app on Google Play. */
+export const MARVEL_PACKAGE = "com.webtoon.marvelcomics";
+
+/**
+ * On Android, an intent link hands the page to the Marvel Comics app by name, so it opens in the
+ * app instead of a browser tab. If the app is missing or does not take that page, Android opens
+ * the web page instead.
+ */
+export function openInApp(url: string, android: boolean): string {
+  if (!android || !url.startsWith(WEBTOON_ORIGIN)) return url;
+  const rest = url.slice("https://".length);
+  return `intent://${rest}#Intent;scheme=https;package=${MARVEL_PACKAGE};S.browser_fallback_url=${encodeURIComponent(url)};end`;
+}
+
+const android = typeof navigator !== "undefined" && /android/i.test(navigator.userAgent);
+
+/** Where "In Webtoon öffnen" leads: the app's search for the issue's series, in the app on Android. */
+export function webtoonHref(issue: Issue | undefined, series: Series | undefined, onAndroid = android): string {
+  const url = issue && series ? exploreUrl(series.name) : `${WEBTOON_ORIGIN}/explore`;
+  return openInApp(url, onAndroid);
 }
